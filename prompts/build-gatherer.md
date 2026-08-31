@@ -22,21 +22,20 @@ whatever it is).
 in the exact shape ChangeAtlas's `impact.py` expects. Run it *before*
 running `python -m changeatlas` — ChangeAtlas picks up
 `out/release-<label>-data.json` automatically whenever that file already
-exists, so a fresh run of your script is how you refresh it. Two flag
-quirks to know when you invoke `changeatlas` this way:
+exists, so a fresh run of your script is how you refresh it. Once the file
+is there, render it with just:
 
-- `--query` and `--release` are still required on the command line even
-  though your gatherer already produced the cache — pass `--release` as
-  the same `<label>` your script used, and `--query` as anything
-  containing a GUID-shaped string (e.g.
-  `--query 00000000-0000-0000-0000-000000000000`); ChangeAtlas parses a
-  GUID out of `--query` before it even checks whether a cache file
-  exists, so the flag is mandatory but its value is otherwise unused when
-  a cache is present.
-- **Don't pass `--refresh`.** That flag tells ChangeAtlas to ignore the
-  cache and fetch from Azure DevOps itself (requiring `--org`/`--project`
-  and an ADO PAT) — not what you want with a custom gatherer. To refresh
-  the data, just re-run your own script before re-running `changeatlas`.
+```
+python -m changeatlas --release <label> --graph-data /path/to/graph-data.json
+```
+
+No `--query`, `--org`, `--project`, or ADO token needed — ChangeAtlas only
+asks for those when it actually has to fetch (no cache file found, or you
+pass `--refresh`), and a hand-built cache means it never does. **Don't
+pass `--refresh`** with a custom gatherer, though: that flag tells
+ChangeAtlas to ignore the cache and fetch from Azure DevOps itself instead
+— not what you want here. To refresh the data, just re-run your own script
+before re-running `changeatlas`.
 
 Once `docs/release-data-schema.md` exists in this repo, treat it as the
 canonical version of the contract below — this prompt inlines the same

@@ -50,7 +50,9 @@ def parse_query_id(value: str) -> str:
 def main(argv=None, fetch=ado.default_fetch) -> int:
     ap = argparse.ArgumentParser(
         prog="changeatlas", description="Release impact map from an ADO shared query.")
-    ap.add_argument("--query", help="shared-query URL or GUID")
+    ap.add_argument("--query", help="shared-query URL or GUID (required only to "
+                    "fetch — not needed when a release-<label>-data.json cache "
+                    "already exists)")
     ap.add_argument("--release", help="release label, e.g. 1.0")
     ap.add_argument("--refresh", action="store_true", help="re-fetch from ADO, ignore cache")
     ap.add_argument("--check-map", action="store_true",
@@ -114,17 +116,26 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         return 1
 
     if not args.sample:
-        if not args.query or not release:
-            print("--query and --release are required (or use --check-map / --sample)",
+        if not release:
+            print("--release is required (or use --check-map / --sample)",
                   file=sys.stderr)
             return 2
-        try:
-            query_id = parse_query_id(args.query)
-        except ValueError as exc:
-            print(exc, file=sys.stderr)
-            return 1
         cache_path = base / "out" / f"release-{release}-data.json"
         use_cache = cache_path.exists() and not args.refresh
+        # --query (and the ADO fetch it drives) is only needed when there's
+        # no cache to read — a hand-built release-data.json (e.g. from a
+        # custom gatherer, see prompts/build-gatherer.md) never needs it.
+        query_id = None
+        if not use_cache:
+            if not args.query:
+                print(f"--query is required to fetch (no cache found at {cache_path})",
+                      file=sys.stderr)
+                return 2
+            try:
+                query_id = parse_query_id(args.query)
+            except ValueError as exc:
+                print(exc, file=sys.stderr)
+                return 1
     else:
         # --sample never touches ADO: the bundled cache is always used.
         use_cache = True

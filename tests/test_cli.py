@@ -126,6 +126,24 @@ def test_main_uses_cache_and_renders(tmp_path, capsys):
     assert '"touched"' in html and '"testOnly"' in html  # payload carries the new tiers
 
 
+def test_main_no_query_needed_when_cache_exists(tmp_path, monkeypatch):
+    """A hand-built release-data.json (e.g. from a custom gatherer, see
+    prompts/build-gatherer.md) must render with only --release + --graph-data
+    (+ --base-dir) — no --query, no --org/--project, and no ADO token."""
+    monkeypatch.delenv(ado.TOKEN_ENV, raising=False)
+    root = setup_dirs(tmp_path)
+    (root / "out" / "release-1.0-data.json").write_text(json.dumps(CACHE), encoding="utf-8")
+
+    def forbidden_fetch(url):
+        raise AssertionError("fetch must not be called when cache exists and --query is absent")
+
+    args = ["--release", "1.0", "--graph-data", str(root / "graph-data.json"),
+            "--base-dir", str(root), "--vis", str(root / "vis.js")]
+    rc = cli.main(args, fetch=forbidden_fetch)
+    assert rc == 0
+    assert (root / "out" / "impact-1.0.html").exists()
+
+
 def test_main_refresh_triggers_fetch(tmp_path):
     root, args = make_project(tmp_path)
     (root / "out" / "release-1.0-data.json").write_text(json.dumps(CACHE), encoding="utf-8")
@@ -170,6 +188,23 @@ def test_graph_data_required(tmp_path, capsys):
     assert rc == 2 or rc == 1
     err = capsys.readouterr().err
     assert "--graph-data is required" in err
+
+
+def test_query_required_message_when_fetch_needed(tmp_path, capsys):
+    """No cache and no --query: --org/--project/token are never even reached —
+    the error names the missing flag and why (no cache found)."""
+    root = setup_dirs(tmp_path)   # no cache file written -> a fetch would be needed
+    args = ["--release", "1.0", "--graph-data", str(root / "graph-data.json"),
+            "--base-dir", str(root), "--vis", str(root / "vis.js")]
+
+    def forbidden_fetch(url):
+        raise AssertionError("fetch must not be attempted without a resolvable --query")
+
+    rc = cli.main(args, fetch=forbidden_fetch)
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "--query is required to fetch" in err
+    assert "no cache found at" in err
 
 
 def test_missing_token_message_names_env_var_and_os_command(tmp_path, capsys, monkeypatch):
