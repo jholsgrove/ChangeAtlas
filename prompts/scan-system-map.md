@@ -14,6 +14,29 @@ it, with the bracketed placeholders filled in first.
   your system's databases, queues, and known cross-repo calls that scanning
   code can't reliably discover.
 
+**Speed this up: agent context files and a cross-repo reference map.** The
+scan gets dramatically faster and more accurate if your repos already carry
+the context an AI agent needs:
+
+- **A per-repo agent context file** (`CLAUDE.md`, `AGENTS.md`, or similar)
+  in each repo's root, describing what the repo is for, its major
+  subsystems/folders, and what it depends on. Agents read these first, so
+  they start oriented instead of inferring purpose from folder names — and
+  the one-line descriptions the table below asks for can be lifted straight
+  from them.
+- **A cross-repo reference map** — one document (in whichever repo is your
+  "core") that records the topology no single repo's code can show: which
+  repo owns which database, what flows through each queue, which repos call
+  which over HTTP. If you have one, the entire "facts to take as given"
+  section below is a copy-paste from it. If you don't, consider writing it
+  as a by-product of this exercise: it's a few paragraphs, it pays off for
+  every future AI-assisted task across your repos, and interlinking it from
+  each repo's context file means agents working in any one repo can find it.
+
+Neither is required — the prompt works from bare checkouts — but teams with
+these files in place get a better map from a shorter run, and keep getting
+value from them long after this scan.
+
 **What you get out:** a `graph-data.json` file (see the worked example at
 `sample/graph-data.json` in this repo) plus a short report the agent prints
 after generating it — node/edge counts and its 10 least-confident nodes, so
@@ -79,6 +102,12 @@ the graph should come from your own scanning.
 For each repo, scan the **plumbing**, not the business logic. You are
 looking for structure, not reading every file. Concretely, look at:
 
+- **First, any agent context or orientation docs in the repo root**
+  (`CLAUDE.md`, `AGENTS.md`, `README`, architecture/coordination docs) —
+  read these before touching code and treat them as strong hints about
+  what the repo's components are and how they connect. Where such a doc
+  contradicts what the code plainly shows, trust the code and note the
+  discrepancy in your final report.
 - Solution/project/package manifest files (`.sln`, `.csproj`, `package.json`,
   `pyproject.toml`, `go.mod`, `pom.xml`, etc.) to find the projects/modules
   that make up the repo and how they reference each other.
