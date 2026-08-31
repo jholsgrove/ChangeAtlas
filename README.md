@@ -155,6 +155,13 @@ python -m changeatlas ... --heuristics /path/to/custom-heuristics.json
 `*.csproj`, `Directory.Build.props`, …). Write your own JSON file in the
 same shape (see `config/heuristics/generic.json`) for anything else.
 
+`test_markers` match as a **substring within a path segment**, not a whole
+segment — so a marker like `"test"` also matches a segment such as
+`"latest"` or `"attestation"`. This is deliberate (inherited behaviour),
+trading a few false positives for never missing a differently-named test
+folder; tune it in a custom heuristics file if your codebase needs
+tighter matching.
+
 ## Anonymised demos
 
 ```sh
@@ -171,4 +178,5 @@ sharing its content.
 ## License
 
 MIT — see [`LICENSE`](LICENSE). The vendored `vis-network` (in `vendor/`)
-is MIT/Apache-2.0 dual-licensed.
+is MIT/Apache-2.0 dual-licensed — see
+[`vendor/LICENSE-vis-network`](vendor/LICENSE-vis-network).
