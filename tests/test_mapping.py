@@ -5,40 +5,40 @@ import pytest
 from changeatlas import mapping
 
 COMPONENTS = [
-    {"id": "poller-snmp-stack", "repo": "highlight-poller",
-     "globs": ["**/Snmp/**", "**/SnmpTrap*"]},
-    {"id": "poller-core", "repo": "highlight-poller", "globs": ["**/Core/**"]},
-    {"id": "highlight-poller", "repo": "highlight-poller", "globs": ["**"]},
-    {"id": "driver-meraki", "repo": "highlight-driver",
-     "globs": ["**/Highlight.Driver.Meraki/**"]},
+    {"id": "web-auth-stack", "repo": "shop-web",
+     "globs": ["**/Auth/**", "**/AuthTrap*"]},
+    {"id": "web-core", "repo": "shop-web", "globs": ["**/API/**"]},
+    {"id": "shop-web", "repo": "shop-web", "globs": ["**"]},
+    {"id": "pricing-provider", "repo": "pricing-engine",
+     "globs": ["**/Pricing.Engine.Provider/**"]},
 ]
 
 
 def test_normalise_repo():
-    assert mapping.normalise_repo("Highlight.Poller") == "highlight-poller"
-    assert mapping.normalise_repo("Highlight") == "highlight"
+    assert mapping.normalise_repo("Shop.Web") == "shop-web"
+    assert mapping.normalise_repo("Shop") == "shop"
 
 
 def test_match_file_specific_and_catchall():
-    ids, beyond = mapping.match_file(COMPONENTS, "highlight-poller", "/src/Snmp/Walker.cs")
-    assert set(ids) == {"poller-snmp-stack", "highlight-poller"}
+    ids, beyond = mapping.match_file(COMPONENTS, "shop-web", "/src/Auth/Walker.cs")
+    assert set(ids) == {"web-auth-stack", "shop-web"}
     assert beyond is True
 
 
 def test_match_file_catchall_only():
-    ids, beyond = mapping.match_file(COMPONENTS, "highlight-poller", "/tools/Build.ps1")
-    assert ids == ["highlight-poller"]
+    ids, beyond = mapping.match_file(COMPONENTS, "shop-web", "/tools/Build.ps1")
+    assert ids == ["shop-web"]
     assert beyond is False
 
 
 def test_match_file_repo_scoped():
-    ids, _ = mapping.match_file(COMPONENTS, "highlight-driver", "/Snmp/x.cs")
-    assert ids == []  # driver repo has no snmp component and no catch-all here
+    ids, _ = mapping.match_file(COMPONENTS, "pricing-engine", "/Auth/x.cs")
+    assert ids == []  # pricing-engine repo has no auth component and no catch-all here
 
 
 def test_match_file_case_insensitive_and_root_level():
-    ids, _ = mapping.match_file(COMPONENTS, "highlight-poller", "SNMP/walker.CS")
-    assert "poller-snmp-stack" in ids
+    ids, _ = mapping.match_file(COMPONENTS, "shop-web", "AUTH/walker.CS")
+    assert "web-auth-stack" in ids
 
 
 def test_load_map_valid(tmp_path):
@@ -65,18 +65,18 @@ def test_load_map_reports_all_errors(tmp_path):
 
 def test_check_map():
     nodes = [
-        {"id": "poller-snmp-stack", "type": "subsystem", "repo": "highlight-poller"},
-        {"id": "poller-core", "type": "subsystem", "repo": "highlight-poller"},
-        {"id": "highlight-poller", "type": "repo", "repo": "highlight-poller"},
-        {"id": "driver-meraki", "type": "driver", "repo": "highlight-driver"},
-        {"id": "poller-wlc", "type": "subsystem", "repo": "highlight-poller"},  # unmapped
-        {"id": "messenger-datadog", "type": "external", "repo": "highlight-messenger"},
+        {"id": "web-auth-stack", "type": "subsystem", "repo": "shop-web"},
+        {"id": "web-core", "type": "subsystem", "repo": "shop-web"},
+        {"id": "shop-web", "type": "repo", "repo": "shop-web"},
+        {"id": "pricing-provider", "type": "driver", "repo": "pricing-engine"},
+        {"id": "web-cache", "type": "subsystem", "repo": "shop-web"},  # unmapped
+        {"id": "notification-datadog", "type": "external", "repo": "notification-service"},
     ]
     errors, warnings = mapping.check_map(COMPONENTS, nodes)
     assert errors == []
-    assert any("poller-wlc" in w for w in warnings)
-    assert not any("messenger-datadog" in w for w in warnings)
+    assert any("web-cache" in w for w in warnings)
+    assert not any("notification-datadog" in w for w in warnings)
 
     errors, _ = mapping.check_map(
-        COMPONENTS + [{"id": "ghost", "repo": "highlight-poller", "globs": ["**"]}], nodes)
+        COMPONENTS + [{"id": "ghost", "repo": "shop-web", "globs": ["**"]}], nodes)
     assert any("ghost" in e for e in errors)
