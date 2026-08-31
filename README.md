@@ -9,10 +9,10 @@ just weather painted on top by deterministic code: each shaded component
 links straight to the exact work items and pull requests that touched it.
 
 <!--
-  Screenshot to add before the first public release: run
-  `python -m changeatlas --sample`, open the resulting
-  out/impact-sample.html in a browser, and save a screenshot of it as
-  docs/img/sample-map.png (referenced below). No image is committed yet.
+  To regenerate docs/img/sample-map.png: run `python -m changeatlas --sample`,
+  then screenshot out/impact-sample.html at 1600x1000 (headless works:
+  msedge --headless=new --screenshot=docs/img/sample-map.png
+  --window-size=1600,1000 --virtual-time-budget=10000 <file:// URL>).
 -->
 ![Sample impact map](docs/img/sample-map.png)
 
