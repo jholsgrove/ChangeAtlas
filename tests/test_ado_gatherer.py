@@ -79,6 +79,61 @@ def test_gather_release_skips_failing_pr_and_reports():
     assert gathered["work_items"][0]["prs"] == []
     assert any("PR 10" in s for s in gathered["skipped"])
 
+def test_gather_release_caches_pr_across_work_items():
+    # Two different work items link to the SAME PR -> pr_details/pr_changed_files
+    # must be fetched only once (gather_release's pr_cache), and both work items
+    # still carry the (shared) PR object.
+    REPO_GUID, PR_ID = "aaa1", 42
+    calls = []
+    def fetch(url):
+        calls.append(url)
+        if "/_apis/wit/wiql/" in url:
+            return {"workItems": [{"id": 1}, {"id": 2}]}
+        if "/_apis/wit/workitems?ids=1,2" in url:
+            return {"value": [
+                {"id": 1, "fields": {"System.WorkItemType": "User Story", "System.Title": "A"}},
+                {"id": 2, "fields": {"System.WorkItemType": "Bug", "System.Title": "B"}}]}
+        if "/_apis/wit/workitems/1?" in url:
+            return {"relations": [{"rel": "ArtifactLink",
+                    "url": f"vstfs:///Git/PullRequestId/P%2F{REPO_GUID}%2F{PR_ID}"}]}
+        if "/_apis/wit/workitems/2?" in url:
+            return {"relations": [{"rel": "ArtifactLink",
+                    "url": f"vstfs:///Git/PullRequestId/P%2F{REPO_GUID}%2F{PR_ID}"}]}
+        if "/_apis/git/repositories?" in url:
+            return {"value": [{"id": REPO_GUID.upper(), "name": "shop-web", "isDisabled": False}]}
+        if f"/_apis/git/pullrequests/{PR_ID}?" in url:
+            return {"pullRequestId": PR_ID, "title": "Checkout fix", "status": "completed",
+                    "repository": {"name": "shop-web"}}
+        if f"/pullRequests/{PR_ID}/iterations?" in url:
+            return {"value": [{"id": 1}]}
+        if "/iterations/1/changes" in url:
+            return {"changeEntries": [{"item": {"path": "/src/a.cs", "gitObjectType": "blob"}}]}
+        raise AssertionError(f"unexpected url: {url}")
+
+    gathered = ado.gather_release(fetch, ORG, PROJ, "q", "1.0")
+    wi1, wi2 = gathered["work_items"]
+    assert wi1["prs"][0]["id"] == PR_ID
+    assert wi2["prs"][0]["id"] == PR_ID
+    pr_detail_hits = [u for u in calls if f"/_apis/git/pullrequests/{PR_ID}?" in u]
+    assert len(pr_detail_hits) == 1        # fetched once despite two links
+
+def test_gather_release_unknown_repo_guid_skipped():
+    def fetch(url):
+        if "/_apis/wit/wiql/" in url:
+            return {"workItems": [{"id": 1}]}
+        if "/_apis/wit/workitems?ids=1" in url:
+            return {"value": [{"id": 1, "fields": {"System.WorkItemType": "Bug", "System.Title": "t"}}]}
+        if "/_apis/wit/workitems/1?" in url:
+            return {"relations": [{"rel": "ArtifactLink",
+                    "url": "vstfs:///Git/PullRequestId/P%2Fzzz9%2F55"}]}
+        if "/_apis/git/repositories?" in url:
+            return {"value": []}
+        raise AssertionError(f"unexpected url: {url}")
+
+    gathered = ado.gather_release(fetch, ORG, PROJ, "q", "1.0")
+    assert gathered["work_items"][0]["prs"] == []
+    assert any("unknown repo guid" in s for s in gathered["skipped"])
+
 def test_default_fetch_requires_token(monkeypatch):
     monkeypatch.delenv(ado.TOKEN_ENV, raising=False)
     with pytest.raises(ado.TokenMissingError):
