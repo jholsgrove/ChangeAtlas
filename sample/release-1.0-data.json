@@ -1,0 +1,76 @@
+{
+  "release": "1.0",
+  "query": "sample-fictional-query",
+  "fetched_at": "2026-08-31T00:00:00+00:00",
+  "skipped": [],
+  "work_items": [
+    {
+      "id": 101,
+      "type": "User Story",
+      "title": "Coupon codes at checkout",
+      "url": "https://tracker.example/workitems/101",
+      "prs": [
+        {
+          "id": 11,
+          "title": "Add coupon codes to checkout",
+          "repo": "shop-web",
+          "url": "https://tracker.example/shop-web/pullrequest/11",
+          "status": "completed",
+          "files": [
+            "/src/checkout/CouponForm.tsx",
+            "/src/checkout/CouponApi.ts",
+            "/src/checkout/Totals.tsx",
+            "/src/checkout/__tests__/Coupon.test.tsx",
+            "/package-lock.json"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "type": "Bug",
+      "title": "Rounding fix in pricing",
+      "url": "https://tracker.example/workitems/102",
+      "prs": [
+        {
+          "id": 12,
+          "title": "Fix rounding in pricing engine",
+          "repo": "shop-catalog",
+          "url": "https://tracker.example/shop-catalog/pullrequest/12",
+          "status": "completed",
+          "files": [
+            "/src/pricing/Rounding.cs"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 103,
+      "type": "Task",
+      "title": "Harden order workflow retries",
+      "url": "https://tracker.example/workitems/103",
+      "prs": [
+        {
+          "id": 13,
+          "title": "Add retry tests for order workflow",
+          "repo": "shop-orders",
+          "url": "https://tracker.example/shop-orders/pullrequest/13",
+          "status": "completed",
+          "files": [
+            "/src/workflow/tests/RetryTests.cs"
+          ]
+        },
+        {
+          "id": 14,
+          "title": "Add coupon column migration",
+          "repo": "shop-orders",
+          "url": "https://tracker.example/shop-orders/pullrequest/14",
+          "status": "completed",
+          "files": [
+            "/src/orders-db/migrations/202608_AddCouponColumn.sql"
+          ]
+        }
+      ]
+    }
+  ]
+}

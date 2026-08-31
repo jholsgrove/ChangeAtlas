@@ -1,0 +1,23 @@
+{
+  "components": [
+    {"id": "shop-web", "repo": "shop-web", "globs": ["**"]},
+    {"id": "storefront-ui", "repo": "shop-web", "globs": ["**/src/storefront/**"]},
+    {"id": "checkout-flow", "repo": "shop-web", "globs": ["**/src/checkout/**"]},
+    {"id": "account-area", "repo": "shop-web", "globs": ["**/src/account/**"]},
+    {"id": "web-api-client", "repo": "shop-web", "globs": ["**/src/api-client/**"]},
+
+    {"id": "shop-orders", "repo": "shop-orders", "globs": ["**"]},
+    {"id": "orders-api", "repo": "shop-orders", "globs": ["**/src/orders-api/**"]},
+    {"id": "payment-gateway", "repo": "shop-orders", "globs": ["**/src/payments/**"]},
+    {"id": "order-workflow", "repo": "shop-orders", "globs": ["**/src/workflow/**"]},
+    {"id": "invoice-generator", "repo": "shop-orders", "globs": ["**/src/invoicing/**"]},
+    {"id": "orders-db", "repo": "shop-orders", "globs": ["**/src/orders-db/**"]},
+
+    {"id": "shop-catalog", "repo": "shop-catalog", "globs": ["**"]},
+    {"id": "catalog-api", "repo": "shop-catalog", "globs": ["**/src/catalog-api/**"]},
+    {"id": "product-import", "repo": "shop-catalog", "globs": ["**/src/import/**"]},
+    {"id": "search-index", "repo": "shop-catalog", "globs": ["**/src/search/**"]},
+    {"id": "pricing-engine", "repo": "shop-catalog", "globs": ["**/src/pricing/**"]},
+    {"id": "catalog-db", "repo": "shop-catalog", "globs": ["**/src/catalog-db/**"]}
+  ]
+}

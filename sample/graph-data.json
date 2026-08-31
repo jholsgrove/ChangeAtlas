@@ -1,0 +1,190 @@
+{
+  "nodes": [
+    {
+      "id": "shop-web",
+      "title": "Shop Web",
+      "type": "repo",
+      "repo": "shop-web",
+      "summary": "The customer-facing storefront: browsing, checkout, and account management.",
+      "tags": ["shop-web", "repo"]
+    },
+    {
+      "id": "shop-orders",
+      "title": "Shop Orders",
+      "type": "repo",
+      "repo": "shop-orders",
+      "summary": "Order capture, payment, fulfillment workflow, and invoicing for the shop.",
+      "tags": ["shop-orders", "repo"]
+    },
+    {
+      "id": "shop-catalog",
+      "title": "Shop Catalog",
+      "type": "repo",
+      "repo": "shop-catalog",
+      "summary": "Product catalog, search, pricing, and supplier import for the shop.",
+      "tags": ["shop-catalog", "repo"]
+    },
+    {
+      "id": "storefront-ui",
+      "title": "Storefront UI",
+      "type": "feature",
+      "repo": "shop-web",
+      "summary": "The public browsing and product-listing pages of the storefront.",
+      "tags": ["shop-web", "feature"]
+    },
+    {
+      "id": "checkout-flow",
+      "title": "Checkout Flow",
+      "type": "feature",
+      "repo": "shop-web",
+      "summary": "The multi-step checkout experience, from cart to order confirmation.",
+      "tags": ["shop-web", "feature"]
+    },
+    {
+      "id": "account-area",
+      "title": "Account Area",
+      "type": "feature",
+      "repo": "shop-web",
+      "summary": "Customer account pages: profile, addresses, and order history.",
+      "tags": ["shop-web", "feature"]
+    },
+    {
+      "id": "web-api-client",
+      "title": "Web API Client",
+      "type": "project",
+      "repo": "shop-web",
+      "summary": "Shared HTTP client library used by shop-web to call backend services.",
+      "tags": ["shop-web", "project"]
+    },
+    {
+      "id": "orders-api",
+      "title": "Orders API",
+      "type": "service",
+      "repo": "shop-orders",
+      "summary": "Public HTTP service for creating and querying customer orders.",
+      "tags": ["shop-orders", "service"]
+    },
+    {
+      "id": "payment-gateway",
+      "title": "Payment Gateway",
+      "type": "service",
+      "repo": "shop-orders",
+      "summary": "Handles card authorization and capture by calling out to Stripe.",
+      "tags": ["shop-orders", "service"]
+    },
+    {
+      "id": "order-workflow",
+      "title": "Order Workflow",
+      "type": "service",
+      "repo": "shop-orders",
+      "summary": "Background state machine that advances orders through fulfillment.",
+      "tags": ["shop-orders", "service"]
+    },
+    {
+      "id": "invoice-generator",
+      "title": "Invoice Generator",
+      "type": "feature",
+      "repo": "shop-orders",
+      "summary": "Builds and emails PDF invoices when an order ships.",
+      "tags": ["shop-orders", "feature"]
+    },
+    {
+      "id": "orders-db",
+      "title": "Orders Database",
+      "type": "database",
+      "repo": "shop-orders",
+      "summary": "Relational store of orders, line items, and payment records.",
+      "tags": ["shop-orders", "database"]
+    },
+    {
+      "id": "catalog-api",
+      "title": "Catalog API",
+      "type": "service",
+      "repo": "shop-catalog",
+      "summary": "Public HTTP service for product and category lookups.",
+      "tags": ["shop-catalog", "service"]
+    },
+    {
+      "id": "product-import",
+      "title": "Product Import",
+      "type": "feature",
+      "repo": "shop-catalog",
+      "summary": "Scheduled job that ingests supplier product feeds into the catalog.",
+      "tags": ["shop-catalog", "feature"]
+    },
+    {
+      "id": "search-index",
+      "title": "Search Index",
+      "type": "service",
+      "repo": "shop-catalog",
+      "summary": "Maintains the product search index used by storefront browsing.",
+      "tags": ["shop-catalog", "service"]
+    },
+    {
+      "id": "pricing-engine",
+      "title": "Pricing Engine",
+      "type": "service",
+      "repo": "shop-catalog",
+      "summary": "Computes displayed and checkout prices, including discounts and rounding.",
+      "tags": ["shop-catalog", "service"]
+    },
+    {
+      "id": "catalog-db",
+      "title": "Catalog Database",
+      "type": "database",
+      "repo": "shop-catalog",
+      "summary": "Relational store of products, categories, and pricing rules.",
+      "tags": ["shop-catalog", "database"]
+    },
+    {
+      "id": "order-events",
+      "title": "Order Events",
+      "type": "messaging",
+      "repo": "cross",
+      "summary": "Message bus topic carrying order lifecycle events between services.",
+      "tags": ["cross", "messaging"]
+    },
+    {
+      "id": "stripe",
+      "title": "Stripe",
+      "type": "external",
+      "repo": "external",
+      "summary": "Third-party payment processor used for card authorization and capture.",
+      "tags": ["external", "external"]
+    },
+    {
+      "id": "email-provider",
+      "title": "Mailjet-ish",
+      "type": "external",
+      "repo": "external",
+      "summary": "Third-party transactional email provider used to deliver invoices.",
+      "tags": ["external", "external"]
+    }
+  ],
+  "edges": [
+    {"from": "shop-web", "to": "storefront-ui", "kind": "contains"},
+    {"from": "shop-web", "to": "checkout-flow", "kind": "contains"},
+    {"from": "shop-web", "to": "account-area", "kind": "contains"},
+    {"from": "shop-web", "to": "web-api-client", "kind": "contains"},
+    {"from": "shop-orders", "to": "orders-api", "kind": "contains"},
+    {"from": "shop-orders", "to": "payment-gateway", "kind": "contains"},
+    {"from": "shop-orders", "to": "order-workflow", "kind": "contains"},
+    {"from": "shop-orders", "to": "invoice-generator", "kind": "contains"},
+    {"from": "shop-catalog", "to": "catalog-api", "kind": "contains"},
+    {"from": "shop-catalog", "to": "product-import", "kind": "contains"},
+    {"from": "shop-catalog", "to": "search-index", "kind": "contains"},
+    {"from": "shop-catalog", "to": "pricing-engine", "kind": "contains"},
+    {"from": "storefront-ui", "to": "catalog-api", "kind": "http"},
+    {"from": "checkout-flow", "to": "orders-api", "kind": "http"},
+    {"from": "web-api-client", "to": "orders-api", "kind": "http"},
+    {"from": "orders-api", "to": "orders-db", "kind": "sql"},
+    {"from": "catalog-api", "to": "catalog-db", "kind": "sql"},
+    {"from": "shop-orders", "to": "orders-db", "kind": "owns"},
+    {"from": "shop-catalog", "to": "catalog-db", "kind": "owns"},
+    {"from": "order-workflow", "to": "order-events", "kind": "bus"},
+    {"from": "invoice-generator", "to": "order-events", "kind": "consumes"},
+    {"from": "payment-gateway", "to": "stripe", "kind": "uses"},
+    {"from": "invoice-generator", "to": "email-provider", "kind": "uses"},
+    {"from": "checkout-flow", "to": "web-api-client", "kind": "project-ref"}
+  ]
+}
