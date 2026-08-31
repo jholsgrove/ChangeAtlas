@@ -3,3 +3,9 @@ __pycache__/
 .pytest_cache/
 out/
 docs/superpowers/
+
+# Real system maps describe internal company architecture — never commit
+# them to this (public) repo. Keep them local or in a private repo and
+# point ChangeAtlas at them with --graph-data / --base-dir.
+graph-data.json
+config/component-globs.json
