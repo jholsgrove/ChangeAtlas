@@ -101,3 +101,26 @@ def test_node_titles_generic_and_repo_labels_mapped():
     assert any(t.startswith("Subsystem ") for t in titles)
     repos = {n["repo"] for n in out["nodes"]}
     assert all(r.startswith("Repo ") or r == "Shared" for r in repos)
+
+
+def test_repo_labels_survive_past_26_repos():
+    # STRONGLY RECOMMENDED 9: iterating string.ascii_uppercase directly
+    # raised StopIteration past 26 distinct repos. A counter-based scheme
+    # must keep going -- Repo A..Z for the first 26, then Repo 27, 28, ...
+    nodes = [{"id": f"n{i}", "title": f"T{i}", "type": "service", "repo": f"repo-{i}",
+             "summary": "s", "tags": []} for i in range(30)]
+    payload = {
+        "release": "1.0", "generated": "2026-08-31",
+        "nodes": nodes, "edges": [],
+        "typeStyle": {"service": {"label": "Service", "color": "#2db37c"}},
+        "edgeLabel": {},
+        "impact": {"changed": [], "touched": [], "testOnly": [], "peripheral": []},
+        "details": {},
+    }
+    out = anonymize.anonymize_payload(payload)
+    labels = [n["repo"] for n in out["nodes"]]
+    assert len(set(labels)) == 30
+    assert "Repo A" in labels
+    assert "Repo Z" in labels
+    assert "Repo 27" in labels
+    assert "Repo 30" in labels

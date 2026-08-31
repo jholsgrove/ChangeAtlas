@@ -12,17 +12,30 @@ _GENERIC_SUMMARY = ("Sample {label} node — illustrative placeholder only. "
 _FAKE_ORG = "https://dev.azure.example/demo-org/Platform"
 
 
+def _repo_label(i: int) -> str:
+    """Repo A..Z for the first 26 (preserving existing output/fixtures),
+    then Repo 27, Repo 28, ... — a counter that never runs out, unlike
+    iterating string.ascii_uppercase directly."""
+    if i < len(string.ascii_uppercase):
+        return f"Repo {string.ascii_uppercase[i]}"
+    return f"Repo {i + 1}"
+
+
 def anonymize_payload(payload: dict) -> dict:
     nodes = payload["nodes"]
     edges = payload["edges"]
     type_style = payload["typeStyle"]
 
-    letters = iter(string.ascii_uppercase)
     repo_map: dict[str, str] = {}
+    repo_count = 0
     for n in nodes:
         r = n.get("repo") or ""
         if r and r not in repo_map:
-            repo_map[r] = "Shared" if r == "cross" else f"Repo {next(letters)}"
+            if r == "cross":
+                repo_map[r] = "Shared"
+            else:
+                repo_map[r] = _repo_label(repo_count)
+                repo_count += 1
 
     id_map = {n["id"]: f"n{i + 1}" for i, n in enumerate(nodes)}
     label_of = lambda t: type_style.get(t, {}).get("label", t.title())
