@@ -243,3 +243,19 @@ def test_component_map_missing_gives_friendly_message_no_traceback(tmp_path, cap
     assert "component map not found/unreadable at" in err
     assert "prompts/build-glob-map.md" in err
     assert "Traceback" not in err
+
+
+def test_ado_connection_error_maps_to_actionable_message(tmp_path, capsys, monkeypatch):
+    """MUST-FIX 3: AdoConnectionError (DNS/refused/timeout/bad JSON) must map
+    to an actionable stderr message naming the unreachable host, rc 1."""
+    monkeypatch.setenv(ado.TOKEN_ENV, "x")
+    root, args = make_project(tmp_path)   # no cache file written -> a fetch is needed
+
+    def fetch(url):
+        raise ado.AdoConnectionError(url, "Name or service not known")
+
+    rc = main(args + ["--refresh"], fetch=fetch)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "could not reach" in err
+    assert "check --org / network" in err

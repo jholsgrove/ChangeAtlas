@@ -6,6 +6,7 @@ import re
 import sys
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlparse
 
 from . import anonymize, heuristics, impact, mapping, palette, render
 from .gatherers import ado
@@ -168,6 +169,10 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
                     404: "org/project/query id not found — check the URL you passed"}
             print(f"ADO fetch failed: {exc} ({hint.get(exc.status, 'unexpected HTTP status')})",
                   file=sys.stderr)
+            return 1
+        except ado.AdoConnectionError as exc:
+            host = urlparse(exc.url).netloc or exc.url
+            print(f"could not reach {host} — check --org / network", file=sys.stderr)
             return 1
         if not gathered["work_items"]:
             print("Query returned no work items — nothing to map.", file=sys.stderr)

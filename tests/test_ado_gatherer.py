@@ -1,3 +1,5 @@
+import urllib.error
+
 import pytest
 from changeatlas.gatherers import ado
 
@@ -138,3 +140,30 @@ def test_default_fetch_requires_token(monkeypatch):
     monkeypatch.delenv(ado.TOKEN_ENV, raising=False)
     with pytest.raises(ado.TokenMissingError):
         ado.default_fetch("https://example.invalid/x")
+
+
+def test_default_fetch_url_error_maps_to_connection_error(monkeypatch):
+    """MUST-FIX 3: DNS failure / connection refused / timeout out of
+    urlopen() must map to AdoConnectionError, carrying the url and reason
+    but never the token."""
+    monkeypatch.setenv(ado.TOKEN_ENV, "super-secret-pat-value")
+
+    def fake_urlopen(req, timeout=None):
+        raise urllib.error.URLError("Name or service not known")
+
+    monkeypatch.setattr(ado.urllib.request, "urlopen", fake_urlopen)
+
+    with pytest.raises(ado.AdoConnectionError) as exc_info:
+        ado.default_fetch("https://dev.azure.com/exampleorg/_apis/wit/wiql/q")
+
+    exc = exc_info.value
+    assert exc.url == "https://dev.azure.com/exampleorg/_apis/wit/wiql/q"
+    assert "Name or service not known" in exc.reason
+    assert "super-secret-pat-value" not in str(exc)
+
+
+def test_pr_changed_files_empty_iterations_returns_empty_list():
+    """STRONGLY RECOMMENDED 8: an empty iterations list must return [] instead
+    of raising ValueError out of max() on an empty sequence."""
+    fetch = make_fetch({"/pullRequests/9/iterations?": {"value": []}})
+    assert ado.pr_changed_files(fetch, ORG, PROJ, "shop-web", 9) == []

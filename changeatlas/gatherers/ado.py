@@ -22,6 +22,16 @@ class AdoHttpError(RuntimeError):
         self.status, self.url = status, url
 
 
+class AdoConnectionError(RuntimeError):
+    """DNS failure, connection refused, timeout, or a non-JSON response body.
+    Carries the url and a reason string; never the token (the token only
+    ever appears in the Authorization header, never in the url or in any
+    exception message built here)."""
+    def __init__(self, url: str, reason: str):
+        super().__init__(f"could not reach {url}: {reason}")
+        self.url, self.reason = url, reason
+
+
 def default_fetch(url: str) -> dict:
     token = os.environ.get(TOKEN_ENV)
     if not token:
@@ -34,6 +44,13 @@ def default_fetch(url: str) -> dict:
             return json.load(resp)
     except urllib.error.HTTPError as exc:
         raise AdoHttpError(exc.code, url) from exc
+    except urllib.error.URLError as exc:
+        # DNS failure, connection refused, timeout, etc. -- HTTPError (a
+        # URLError subclass) is caught above first, so this is the
+        # never-got-a-response case.
+        raise AdoConnectionError(url, str(exc.reason)) from exc
+    except json.JSONDecodeError as exc:
+        raise AdoConnectionError(url, f"invalid JSON response ({exc})") from exc
 
 
 _PR_ARTIFACT_PREFIX = "vstfs:///Git/PullRequestId/"
@@ -113,7 +130,12 @@ def pr_details(fetch, org: str, project: str, pr_id: int):
 def pr_changed_files(fetch, org: str, project: str, repo: str, pr_id: int) -> list:
     base = f"{org}/{project}/_apis/git/repositories/{repo}/pullRequests/{pr_id}"
     iterations = fetch(f"{base}/iterations?{_API}")
-    max_iter = max(it["id"] for it in iterations["value"])
+    iter_ids = [it["id"] for it in iterations["value"]]
+    if not iter_ids:
+        # No iterations at all (e.g. a PR created and never pushed to) --
+        # nothing to report, not a max()-on-empty-sequence crash.
+        return []
+    max_iter = max(iter_ids)
     changes = fetch(f"{base}/iterations/{max_iter}/changes?{_API}")
     paths = []
     for entry in changes.get("changeEntries", []):
