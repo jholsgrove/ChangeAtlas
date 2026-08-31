@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>/*__TITLE__*/</title>
+<style>
+:root{--bg:#0f1419;--panel:#161c22;--line:#232a31;--fg:#d7dde3;--muted:#8a949e;--accent:#4a9eea;}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+#app{display:flex;height:100%}
+#graph{flex:1;height:100%;background:var(--bg)}
+.side{width:340px;flex:0 0 340px;border-left:1px solid var(--line);
+background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+.side .pad{padding:16px 18px;overflow:auto}
+h1{font-size:15px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line);
+letter-spacing:.02em}
+h1 small{color:var(--muted);font-weight:400;font-size:12px;display:block;margin-top:2px}
+.controls{padding:12px 18px;border-bottom:1px solid var(--line)}
+.controls input,.controls select{width:100%;margin-bottom:8px;padding:7px 9px;
+background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.chip{display:flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid var(--line);
+border-radius:20px;cursor:pointer;font-size:12px;user-select:none;transition:opacity .15s}
+.chip.off{opacity:.35}
+.chip .dot{width:10px;height:10px;border-radius:50%}
+.detail h2{font-size:16px;margin:.2em 0}
+.detail .meta{color:var(--muted);font-size:12px;margin-bottom:10px}
+.detail .badge{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11px;
+color:#0b0e11;font-weight:600}
+.detail blockquote{margin:0 0 14px;padding:.5em .9em;border-left:3px solid var(--accent);
+background:var(--bg);color:var(--fg);border-radius:0 6px 6px 0}
+.detail h4{text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--muted);
+margin:14px 0 4px}
+.detail ul{margin:0;padding-left:0;list-style:none}
+.detail li{padding:3px 0}
+.detail a{color:var(--accent);text-decoration:none;cursor:pointer}
+.detail a:hover{text-decoration:underline}
+.detail .kind{color:var(--muted);font-size:11px;margin-right:5px;
+display:inline-block;min-width:74px}
+.detail .guides{margin-top:6px}
+.detail .guides a{display:block;padding:4px 0}
+.reading{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.reading h3{font-size:15px;margin:.2em 0}
+.reading a.wl{color:var(--accent);cursor:pointer}
+.reading span.broken{color:var(--muted);border-bottom:1px dotted var(--muted)}
+.reading .back{color:var(--muted);cursor:pointer;font-size:12px;display:inline-block;margin-bottom:8px}
+.empty{color:var(--muted)}
+.hint{color:var(--muted);font-size:12px;margin-top:8px}
+button.reset{background:var(--bg);color:var(--fg);border:1px solid var(--line);
+border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px;width:100%}
+button.reset:hover{border-color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="graph"></div>
+  <aside class="side">
+    <h1>/*__TITLE__*/<small id="stats"></small></h1>
+    <div class="controls">
+      <input id="search" list="nodelist" placeholder="Search components…" autocomplete="off">
+      <datalist id="nodelist"></datalist>
+      <div class="legend" id="legend"></div>
+      <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs.</div>
+    </div>
+    <div class="pad">
+      <div class="detail" id="detail"><p class="empty">Select a node to see what it does and what it connects to.</p></div>
+      <button class="reset" id="reset" style="margin-top:14px">Reset view</button>
+    </div>
+  </aside>
+</div>
+<script>/*__VISLIB__*/</script>
+<script>
+const PALETTE = /*__PALETTE__*/;
+// Colour constants below all read from PALETTE (single source of colour truth,
+// WCAG-audited in changeatlas/palette.py). Push the palette into the CSS
+// custom properties the stylesheet above is already keyed on.
+document.documentElement.style.setProperty('--bg', PALETTE.bg);
+document.documentElement.style.setProperty('--panel', PALETTE.panel_bg);
+document.documentElement.style.setProperty('--fg', PALETTE.text);
+document.documentElement.style.setProperty('--muted', PALETTE.muted_text);
+document.documentElement.style.setProperty('--accent', PALETTE.link);
+
+const DATA = /*__DATA__*/;
+const TS = DATA.typeStyle, EL = DATA.edgeLabel;
+const IMPACT = {
+  changed:    { color: PALETTE.tiers.changed.fill,    label: PALETTE.tiers.changed.label },
+  touched:    { color: PALETTE.tiers.touched.fill,    label: PALETTE.tiers.touched.label },
+  testOnly:   { color: PALETTE.tiers.testOnly.fill,   label: PALETTE.tiers.testOnly.label },
+  peripheral: { color: PALETTE.tiers.peripheral.fill, label: PALETTE.tiers.peripheral.label },
+  dimmed:     { color: '#3a3f44', label: 'Untouched' },
+};
+const CHANGED = new Set(DATA.impact.changed);
+const TOUCHED = new Set(DATA.impact.touched || []);
+const TESTONLY = new Set(DATA.impact.testOnly || []);
+const PERIPHERAL = new Set(DATA.impact.peripheral);
+const stateOf = id => CHANGED.has(id) ? 'changed'
+                    : TOUCHED.has(id) ? 'touched'
+                    : TESTONLY.has(id) ? 'testOnly'
+                    : PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
+const baseOpacity = id => stateOf(id) === 'dimmed' ? 0.35 : 1;
+
+const byId = {};
+DATA.nodes.forEach(n => byId[n.id] = n);
+
+const visNodes = new vis.DataSet(DATA.nodes.map(n => ({
+  id: n.id, label: n.title,
+  color: { background: IMPACT[stateOf(n.id)].color,
+           border: IMPACT[stateOf(n.id)].color,
+           highlight: { background: IMPACT[stateOf(n.id)].color, border: '#fff' } },
+  opacity: baseOpacity(n.id),
+  value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
+})));
+const affected = id => stateOf(id) !== 'dimmed';
+const visEdges = new vis.DataSet(DATA.edges.map((e, i) => ({
+  id: 'e' + i, from: e.from, to: e.to, kind: e.kind, note: e.note || '',
+  color: (affected(e.from) && affected(e.to))
+    ? { color: '#8a5a3a', highlight: PALETTE.tiers.peripheral.fill, opacity: 0.9 }
+    : { color: '#2a323a', highlight: PALETTE.link, opacity: 0.4 },
+})));
+
+const container = document.getElementById('graph');
+const network = new vis.Network(container, { nodes: visNodes, edges: visEdges }, {
+  nodes: { shape: 'dot', font: { color: PALETTE.text, size: 13, face: 'Segoe UI' },
+           borderWidth: 1, scaling: { min: 8, max: 34 } },
+  edges: { width: 1, smooth: { type: 'continuous' },
+           arrows: { to: { enabled: true, scaleFactor: 0.45 } } },
+  physics: { barnesHut: { gravitationalConstant: -8000, springLength: 110,
+             springConstant: 0.03, damping: 0.4 }, stabilization: { iterations: 250 } },
+  interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false },
+});
+
+const counts = {
+  changed: CHANGED.size, touched: TOUCHED.size, testOnly: TESTONLY.size,
+  peripheral: PERIPHERAL.size,
+  dimmed: DATA.nodes.length - CHANGED.size - TOUCHED.size - TESTONLY.size - PERIPHERAL.size,
+};
+document.getElementById('stats').textContent =
+  'Generated ' + DATA.generated + ' · ' + counts.changed + ' changed · ' +
+  counts.touched + ' touched · ' + counts.testOnly + ' test-only · ' +
+  counts.peripheral + ' peripheral · ' + counts.dimmed + ' untouched';
+const legend = document.getElementById('legend');
+Object.keys(IMPACT).forEach(k => {
+  const chip = document.createElement('div');
+  chip.className = 'chip';
+  chip.style.cursor = 'default';
+  chip.innerHTML = '<span class="dot" style="background:' + IMPACT[k].color + '"></span>' +
+    IMPACT[k].label + ' (' + counts[k] + ')';
+  legend.appendChild(chip);
+});
+
+// ---- search datalist ----
+const dl = document.getElementById('nodelist');
+DATA.nodes.slice().sort((a,b)=>a.title.localeCompare(b.title)).forEach(n => {
+  const o = document.createElement('option'); o.value = n.title; dl.appendChild(o);
+});
+
+// ---- hover spotlight ----
+function neighbours(id) {
+  const s = new Set([id]);
+  network.getConnectedNodes(id).forEach(n => s.add(n));
+  return s;
+}
+function spotlight(keep) {
+  visNodes.update(DATA.nodes.map(n =>
+    ({ id: n.id, opacity: keep.has(n.id) ? 1 : 0.12 })));
+}
+function clearSpotlight() {
+  visNodes.update(DATA.nodes.map(n => ({ id: n.id, opacity: baseOpacity(n.id) })));
+}
+network.on('hoverNode', p => spotlight(neighbours(p.node)));
+network.on('blurNode', () => { if (!selected) clearSpotlight(); });
+
+// ---- detail panel ----
+let selected = null;
+const detail = document.getElementById('detail');
+function edgesFor(id) {
+  const out = [], inc = [];
+  visEdges.forEach(e => { if (e.from === id) out.push(e); if (e.to === id) inc.push(e); });
+  return { out, inc };
+}
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;');
+}
+function row(otherId, kind, note, dir) {
+  const other = byId[otherId];
+  const label = EL[kind] || kind;
+  const arrow = dir === 'out' ? '→' : '←';
+  return '<li><span class="kind">' + arrow + ' ' + label + '</span>' +
+    '<a data-id="' + otherId + '">' + (other ? esc(other.title) : otherId) + '</a>' +
+    (note ? ' <span class="empty">— ' + note + '</span>' : '') + '</li>';
+}
+function showNode(id) {
+  const n = byId[id]; if (!n) return;
+  selected = id;
+  const { out, inc } = edgesFor(id);
+  let h = '<div class="detail">';
+  h += '<h2>' + esc(n.title) + '</h2>';
+  h += '<div class="meta"><span class="badge" style="background:' + TS[n.type].color + '">' +
+       TS[n.type].label + '</span> <span class="badge" style="background:' +
+       IMPACT[stateOf(id)].color + '">' + IMPACT[stateOf(id)].label + '</span>' +
+       (n.repo ? ' &nbsp;' + n.repo : '') + '</div>';
+  h += '<blockquote>' + n.summary + '</blockquote>';
+  if (out.length) h += '<h4>Depends on / contains</h4><ul>' +
+    out.map(e => row(e.to, e.kind, e.note, 'out')).join('') + '</ul>';
+  if (inc.length) h += '<h4>Used by</h4><ul>' +
+    inc.map(e => row(e.from, e.kind, e.note, 'in')).join('') + '</ul>';
+  const det = DATA.details[id];
+  if (det && (det.prodFiles || det.testFiles)) {
+    h += '<h4>Change size</h4><ul><li>' + det.prodFiles + ' production file(s), ' +
+         det.testFiles + ' test file(s) changed</li></ul>';
+  }
+  if (det && det.stories.length) {
+    h += '<h4>Stories in this release</h4><ul>' + det.stories.map(s =>
+      '<li><span class="kind">' + esc(s.type) + '</span>' +
+      '<a href="' + s.url + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a></li>'
+    ).join('') + '</ul>';
+  }
+  if (det && det.prs.length) {
+    h += '<h4>Pull requests</h4><ul>' + det.prs.map(p =>
+      '<li><span class="kind">' + esc(p.repo) + '</span>' +
+      '<a href="' + p.url + '" target="_blank">!' + p.id + ' ' + esc(p.title) + '</a></li>'
+    ).join('') + '</ul>';
+  }
+  if (stateOf(id) === 'peripheral') {
+    const near = network.getConnectedNodes(id).filter(o => CHANGED.has(o));
+    if (near.length) {
+      h += '<h4>Connected changed components</h4><ul>' + near.map(o =>
+        '<li><a data-id="' + o + '">' + esc(byId[o].title) + '</a></li>').join('') + '</ul>';
+    }
+  }
+  h += '</div>';
+  detail.innerHTML = h;
+  detail.querySelectorAll('a[data-id]').forEach(a =>
+    a.onclick = () => focusNode(a.getAttribute('data-id')));
+  spotlight(neighbours(id));
+}
+function focusNode(id) {
+  network.selectNodes([id]);
+  network.focus(id, { scale: 1.1, animation: { duration: 400 } });
+  showNode(id);
+}
+network.on('click', p => {
+  if (p.nodes.length) showNode(p.nodes[0]);
+  else { selected = null; clearSpotlight();
+    detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>'; }
+});
+
+// ---- search ----
+document.getElementById('search').addEventListener('change', ev => {
+  const v = ev.target.value.trim().toLowerCase();
+  if (!v) return;
+  const hit = DATA.nodes.find(n => n.title.toLowerCase() === v)
+           || DATA.nodes.find(n => n.title.toLowerCase().includes(v));
+  if (hit) focusNode(hit.id);
+});
+
+// ---- reset ----
+document.getElementById('reset').onclick = () => {
+  selected = null;
+  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: false, opacity: baseOpacity(n.id) })));
+  network.unselectAll();
+  network.fit({ animation: { duration: 500 } });
+  detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
+};
+</script>
+</body>
+</html>
