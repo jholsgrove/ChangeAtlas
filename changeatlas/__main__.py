@@ -182,9 +182,16 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
 
     try:
         heur = heuristics.load(args.heuristics, base)
-    except ValueError as exc:
-        print(exc, file=sys.stderr)
-        return 1
+    except ValueError as first_exc:
+        # A preset name (not an explicit path) may simply not exist under a
+        # non-default --base-dir (e.g. a test fixture, or a --base-dir that
+        # only holds project-specific config). Fall back to the package's
+        # own bundled presets (config/heuristics/) before giving up.
+        try:
+            heur = heuristics.load(args.heuristics, BASE_DIR)
+        except ValueError:
+            print(first_exc, file=sys.stderr)
+            return 1
 
     result = impact.compute(gathered, components, graph["nodes"], graph["edges"], heur,
                             changed_threshold=args.changed_threshold)

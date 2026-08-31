@@ -245,6 +245,30 @@ def test_component_map_missing_gives_friendly_message_no_traceback(tmp_path, cap
     assert "Traceback" not in err
 
 
+def test_heuristics_preset_falls_back_to_package_config(tmp_path):
+    """STRONGLY RECOMMENDED 6: a preset name not found under --base-dir must
+    fall back to the package's own bundled config/heuristics/ before
+    erroring -- so "generic" still resolves against a --base-dir that has
+    no config/heuristics/ of its own at all."""
+    (tmp_path / "config").mkdir()
+    (tmp_path / "out").mkdir()
+    (tmp_path / "config" / "component-globs.json").write_text(
+        json.dumps(GLOBS), encoding="utf-8")
+    (tmp_path / "graph-data.json").write_text(json.dumps(GRAPH), encoding="utf-8")
+    (tmp_path / "vis.js").write_text("var vis;", encoding="utf-8")
+    (tmp_path / "out" / "release-1.0-data.json").write_text(json.dumps(CACHE), encoding="utf-8")
+    # No config/heuristics/ directory at all under tmp_path -- "generic"
+    # can only resolve via the package's real config/heuristics/generic.json.
+
+    args = ["--query", GUID, "--release", "1.0",
+            "--graph-data", str(tmp_path / "graph-data.json"),
+            "--base-dir", str(tmp_path), "--vis", str(tmp_path / "vis.js"),
+            "--org", ORG, "--project", PROJ]
+    rc = cli.main(args, fetch=None)
+    assert rc == 0
+    assert (tmp_path / "out" / "impact-1.0.html").exists()
+
+
 def test_ado_connection_error_maps_to_actionable_message(tmp_path, capsys, monkeypatch):
     """MUST-FIX 3: AdoConnectionError (DNS/refused/timeout/bad JSON) must map
     to an actionable stderr message naming the unreachable host, rc 1."""
