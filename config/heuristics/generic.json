@@ -1,0 +1,10 @@
+{
+  "dependency_basenames": ["package-lock.json", "yarn.lock", "pnpm-lock.yaml",
+    "poetry.lock", "pipfile.lock", "cargo.lock", "go.sum", "gemfile.lock",
+    "composer.lock", "packages.lock.json"],
+  "dependency_suffixes": [".csproj", ".nuspec"],
+  "test_markers": ["test", "mock", "spec"],
+  "schema_suffixes": [".sql", ".ddl"],
+  "schema_segments": ["migrations", "migrate"],
+  "schema_basename_contains": ["modelsnapshot", "schema"]
+}

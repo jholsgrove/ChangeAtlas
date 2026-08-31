@@ -1,0 +1,10 @@
+{
+  "dependency_basenames": ["packages.config", "packages.lock.json", "nuget.config",
+    "directory.packages.props", "directory.build.props", "directory.build.targets",
+    "paket.dependencies", "paket.lock"],
+  "dependency_suffixes": [".csproj", ".vbproj", ".fsproj", ".dproj", ".nuspec"],
+  "test_markers": ["test", "mock"],
+  "schema_suffixes": [".sql"],
+  "schema_segments": ["migrations", "sqlfiles"],
+  "schema_basename_contains": ["modelsnapshot"]
+}
