@@ -26,3 +26,13 @@ PALETTE = {
         "peripheral": {"fill": "#9a8f1a", "border": "#d9cf5e", "label": "Peripheral", "borderDashes": [12, 3, 2, 3]},
     },
 }
+
+# Per-node-type graph colours (vis-network node fill). Same values as the
+# ImpactMapper SRC port; contrast-audited against PALETTE["bg"] in
+# tests/test_palette.py::test_type_colors_contrast.
+TYPE_COLORS = {
+    "repo": "#e0533d", "subsystem": "#4a9eea", "project": "#6ea8fe",
+    "service": "#2db37c", "contract": "#c084fc", "driver": "#f0a020",
+    "database": "#d9455f", "messaging": "#e6c34a", "feature": "#26c0c0",
+    "external": "#8a949e",
+}

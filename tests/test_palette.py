@@ -1,4 +1,4 @@
-from changeatlas.palette import PALETTE
+from changeatlas.palette import PALETTE, TYPE_COLORS
 
 def _lum(hexcolor):
     r, g, b = (int(hexcolor[i:i+2], 16) / 255 for i in (1, 3, 5))
@@ -25,3 +25,7 @@ def test_tiers_not_colour_alone():    # WCAG 1.4.1: distinct border treatment pe
 def test_tier_labels_present():
     for tier in PALETTE["tiers"].values():
         assert tier["label"]
+
+def test_type_colors_contrast():     # WCAG 1.4.11: 3:1 for graphical objects
+    for name, hexcolor in TYPE_COLORS.items():
+        assert contrast(hexcolor, PALETTE["bg"]) >= 3.0, name
