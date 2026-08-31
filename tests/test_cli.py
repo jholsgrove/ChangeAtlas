@@ -228,3 +228,18 @@ def test_http_401_maps_to_token_hint(tmp_path, capsys, monkeypatch):
     rc = main(args + ["--refresh"], fetch=fetch)
     assert rc == 1
     assert "token invalid or expired" in capsys.readouterr().err
+
+
+def test_component_map_missing_gives_friendly_message_no_traceback(tmp_path, capsys):
+    """MUST-FIX 2: a nonexistent/unreadable component-globs path must not
+    surface a raw traceback -- friendly stderr message + rc 1."""
+    (tmp_path / "graph-data.json").write_text(json.dumps(GRAPH), encoding="utf-8")
+    # No config/component-globs.json written at all under this base-dir.
+    args = ["--check-map", "--graph-data", str(tmp_path / "graph-data.json"),
+            "--base-dir", str(tmp_path)]
+    rc = main(args, fetch=None)
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "component map not found/unreadable at" in err
+    assert "prompts/build-glob-map.md" in err
+    assert "Traceback" not in err

@@ -103,6 +103,10 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
     except ValueError as exc:
         print(exc, file=sys.stderr)
         return 1
+    except OSError:
+        print(f"component map not found/unreadable at {map_path} — "
+              "see prompts/build-glob-map.md", file=sys.stderr)
+        return 1
 
     errors, warnings = mapping.check_map(components, graph["nodes"])
     if args.check_map:
