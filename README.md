@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/jholsgrove/ChangeAtlas/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jholsgrove/ChangeAtlas/actions/workflows/ci.yml)
 
+![Sample impact map](docs/img/ChangeAtlas-Logo.png)
+
 ChangeAtlas turns a release's tracker query into a shaded map of your
 software system. An AI agent builds the atlas of your system **once** — a
 JSON graph of components and dependencies; after that, every release is
