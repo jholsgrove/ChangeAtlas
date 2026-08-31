@@ -219,13 +219,19 @@ function esc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
                   .replace(/"/g, '&quot;');
 }
+// Only ever hand out an href for a payload URL that is actually http(s) —
+// anything else (javascript:, data:, a bare string) becomes an inert "#"
+// rather than an executable link. Applied in both showNode and buildListView.
+function safeUrl(u) {
+  return /^https?:\/\//i.test(u) ? u : '#';
+}
 function row(otherId, kind, note, dir) {
   const other = byId[otherId];
   const label = EL[kind] || kind;
   const arrow = dir === 'out' ? '→' : '←';
   return '<li><span class="kind">' + arrow + ' ' + label + '</span>' +
-    '<a data-id="' + otherId + '">' + (other ? esc(other.title) : otherId) + '</a>' +
-    (note ? ' <span class="empty">— ' + note + '</span>' : '') + '</li>';
+    '<a data-id="' + esc(otherId) + '">' + (other ? esc(other.title) : esc(otherId)) + '</a>' +
+    (note ? ' <span class="empty">— ' + esc(note) + '</span>' : '') + '</li>';
 }
 function showNode(id) {
   const n = byId[id]; if (!n) return;
@@ -234,11 +240,14 @@ function showNode(id) {
   let h = '<div class="detail">';
   h += '<button type="button" class="reset" id="detail-close">Close details</button>';
   h += '<h2>' + esc(n.title) + '</h2>';
-  h += '<div class="meta"><span class="badge" style="background:' + TS[n.type].color + '">' +
-       TS[n.type].label + '</span> <span class="badge" style="background:' +
+  // Unknown/future node types fall back to a plain neutral badge instead of
+  // throwing on TS[n.type] being undefined.
+  const typeStyle = TS[n.type] || { label: n.type, color: '#8a949e' };
+  h += '<div class="meta"><span class="badge" style="background:' + typeStyle.color + '">' +
+       esc(typeStyle.label) + '</span> <span class="badge" style="background:' +
        IMPACT[stateOf(id)].color + '">' + IMPACT[stateOf(id)].label + '</span>' +
-       (n.repo ? ' &nbsp;' + n.repo : '') + '</div>';
-  h += '<blockquote>' + n.summary + '</blockquote>';
+       (n.repo ? ' &nbsp;' + esc(n.repo) : '') + '</div>';
+  h += '<blockquote>' + esc(n.summary) + '</blockquote>';
   if (out.length) h += '<h4>Depends on / contains</h4><ul>' +
     out.map(e => row(e.to, e.kind, e.note, 'out')).join('') + '</ul>';
   if (inc.length) h += '<h4>Used by</h4><ul>' +
@@ -251,20 +260,20 @@ function showNode(id) {
   if (det && det.stories.length) {
     h += '<h4>Stories in this release</h4><ul>' + det.stories.map(s =>
       '<li><span class="kind">' + esc(s.type) + '</span>' +
-      '<a href="' + s.url + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a></li>'
+      '<a href="' + esc(safeUrl(s.url)) + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a></li>'
     ).join('') + '</ul>';
   }
   if (det && det.prs.length) {
     h += '<h4>Pull requests</h4><ul>' + det.prs.map(p =>
       '<li><span class="kind">' + esc(p.repo) + '</span>' +
-      '<a href="' + p.url + '" target="_blank">!' + p.id + ' ' + esc(p.title) + '</a></li>'
+      '<a href="' + esc(safeUrl(p.url)) + '" target="_blank">!' + p.id + ' ' + esc(p.title) + '</a></li>'
     ).join('') + '</ul>';
   }
   if (stateOf(id) === 'peripheral') {
     const near = network.getConnectedNodes(id).filter(o => CHANGED.has(o));
     if (near.length) {
       h += '<h4>Connected changed components</h4><ul>' + near.map(o =>
-        '<li><a data-id="' + o + '">' + esc(byId[o].title) + '</a></li>').join('') + '</ul>';
+        '<li><a data-id="' + esc(o) + '">' + esc(byId[o].title) + '</a></li>').join('') + '</ul>';
     }
   }
   h += '</div>';
@@ -332,7 +341,7 @@ function buildListView() {
       const node = DATA.nodes.find(n => n.id === id);
       const tr = document.createElement("tr");
       const links = list => list.map(x =>
-        `<a href="${escapeHtml(x.url)}">${escapeHtml("#" + x.id + " " + x.title)}</a>`).join("<br>");
+        `<a href="${escapeHtml(safeUrl(x.url))}">${escapeHtml("#" + x.id + " " + x.title)}</a>`).join("<br>");
       tr.innerHTML = `<th scope="row">${escapeHtml(node ? node.title : id)}</th>` +
         `<td>${label}</td><td>${d.prodFiles}</td><td>${d.testFiles}</td>` +
         `<td>${links(d.stories)}</td><td>${links(d.prs)}</td>`;

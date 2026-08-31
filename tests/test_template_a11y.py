@@ -57,3 +57,35 @@ def test_build_list_view_guards_missing_tier_keys():
                "details": {"a": {"stories": [], "prs": [], "prodFiles": 3, "testFiles": 0}}}
     html2 = render.render(payload, PKG / "template.html", VIS)
     assert "DATA.impact[key] || []" in html2
+
+
+def test_detail_panel_escapes_payload_fields():
+    # Final-review MUST-FIX 1: n.summary, edge notes, n.repo, and otherId (in
+    # data-id attributes) must all be run through esc() in showNode()/row(),
+    # matching buildListView's existing escapeHtml discipline.
+    html = _render()
+    assert "esc(n.summary)" in html
+    assert "esc(note)" in html
+    assert "esc(n.repo)" in html
+    assert 'esc(otherId)' in html
+
+
+def test_safe_url_helper_present_and_used():
+    # Final-review MUST-FIX 1: a safeUrl(u) helper that only ever returns a
+    # http(s) URL verbatim (else "#"), applied to every href built from a
+    # payload URL in both showNode and buildListView.
+    html = _render()
+    assert "function safeUrl(u)" in html
+    assert "^https?:\\/\\/" in html
+    # showNode's story/PR hrefs go through safeUrl (and are attribute-escaped).
+    assert "esc(safeUrl(s.url))" in html
+    assert "esc(safeUrl(p.url))" in html
+    # buildListView's links() helper also goes through safeUrl.
+    assert "escapeHtml(safeUrl(x.url))" in html
+
+
+def test_unknown_node_type_falls_back_to_neutral_badge():
+    # STRONGLY RECOMMENDED 7: TS[n.type] may be undefined for a node type not
+    # present in the payload's typeStyle map -- showNode must not throw.
+    html = _render()
+    assert 'TS[n.type] || { label: n.type, color: \'#8a949e\' }' in html
