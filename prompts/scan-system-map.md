@@ -73,6 +73,13 @@ lowercased repo name with any `.` replaced by `-` — e.g. a repo cloned as
 ChangeAtlas applies to pull-request repo names when it matches changed
 files, so getting it right here matters.)
 
+**This table is the complete system boundary.** Never add a repo to the
+graph that isn't listed here — not even if you find references to other
+repos in code, coordination docs, or release/PR data while scanning. If
+you believe a repo is missing, say so in your report and let me decide;
+changed files from unlisted repos will simply show up in ChangeAtlas's
+"Unmatched files" output rather than on the map.
+
 ## Facts to take as given (seeded backbone)
 
 The facts below are things I already know about this system. **Take them as
@@ -194,6 +201,15 @@ test the X area" about it, it's too small to be its own node — fold it into
 a bigger one or leave it out. If a repo is trivially small (a single
 library with no internal structure worth naming), it's fine for it to have
 just its one repo node and nothing else.
+
+Be careful with that last permission: small in **structure** is not small
+in **behaviour**. A flat repo with no project boundaries (one big legacy
+compilation unit, say) can still contain several distinct testable domains.
+Before collapsing a repo to just its repo node, check for in-repo domain
+documentation — `docs/` folders, `.claude/skills`, architecture readmes, a
+wiki export — and treat a documented domain decomposition as evidence of
+real subsystem boundaries worth their own nodes, even when the folder
+layout shows none.
 
 ## Grounding rules — read this twice
 

@@ -28,10 +28,21 @@ code, and only until it expires.
 ```powershell
 $env:CHANGEATLAS_TOKEN = "<your-pat>"
 ```
-Persistent (applies to NEW terminals):
+This sets the variable **only inside the window you type it in**. Any other
+process — a new terminal, a scheduled task, an AI coding agent running
+commands for you — will not see it. If "the token isn't being seen", this
+is almost always why.
+
+Persistent (visible to every NEW process — use this if anything other than
+the current window will run ChangeAtlas):
 ```powershell
 setx CHANGEATLAS_TOKEN "<your-pat>"
 ```
+Note the syntax difference: `setx` takes **no `=` sign** — it's
+`setx NAME "value"`. Writing `setx CHANGEATLAS_TOKEN = "<pat>"` fails with
+`ERROR: Invalid syntax. Default option is not allowed more than '2' time(s).`
+Also note `setx` does not update the window you run it in — open a new
+terminal (or read it back from the User environment) to use it.
 
 **macOS (zsh)** — current session:
 ```sh

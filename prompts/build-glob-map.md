@@ -70,6 +70,20 @@ Each entry:
 - **Every glob must start with `**`.** ChangeAtlas rejects any glob that
   doesn't (`--check-map` will report it as an error) — this keeps
   matching anchor-independent of where the repo happens to be checked out.
+- **Know the matching semantics** (they're simpler than most glob
+  dialects): matching is **case-insensitive**; `*` **crosses `/`** (so `**`
+  and `*` behave the same — the `**` prefix is a readability convention the
+  validator enforces); and the changed path is matched with a leading `/`
+  prepended, so `**/TopLevelFolder/**` matches files in a repo-root folder.
+  A node may have only **one** entry — duplicate `id`s are rejected — so
+  all of a node's globs live in that one entry's array, and a node cannot
+  have entries under two different `repo` keys.
+- **Anchor globs to a project-folder name segment, not a guessed path.**
+  Prefer `**/Shop.Payments*/**` over `**/src/services/Shop.Payments/**`
+  unless you have verified where the folder actually lives — project
+  folders move, and a stale parent path silently un-maps the whole
+  component. Only include parent segments when you need them to
+  disambiguate two similarly-named folders.
 - **The `repo` key is the lowercased repo name with every `.` replaced by
   `-`.** This must exactly match the `repo` key used in `graph-data.json`
   and the key ChangeAtlas derives from each pull request's repo name at
@@ -124,13 +138,49 @@ There are two things it can report, and they look different:
   block anything (exit code is 0 if there are zero errors, even with
   warnings present).
 
+## Audit it against the working tree
+
+`--check-map` validates structure, but it cannot tell you whether your
+globs actually claim the files they should. You already have local clones,
+so audit the whole tree now instead of waiting for releases to surface
+gaps one PR at a time: run every git-tracked file through the real matcher
+and see what only hits the repo catch-all. From the ChangeAtlas checkout:
+
+```python
+import subprocess, collections, sys
+sys.path.insert(0, ".")
+from changeatlas import mapping
+
+comps = mapping.load_map("config/component-globs.json")
+repos = {  # repo key -> local clone path (same repos as the map)
+    "shop-web": "/path/to/Shop.Web",
+}
+for key, clone in repos.items():
+    files = subprocess.run(["git", "-C", clone, "ls-files"],
+                           capture_output=True, text=True).stdout.splitlines()
+    missed = [p for p in files if not mapping.match_file(comps, key, p)[1]]
+    groups = collections.Counter("/".join(p.split("/")[:2]) for p in missed)
+    print(f"{key}: {len(files) - len(missed)}/{len(files)} mapped beyond repo")
+    for g, c in groups.most_common(15):
+        print(f"  {c:5d}  {g}")
+```
+
+Every large group in that output is either a component your globs missed
+(a project folder in an unexpected location, a content directory like a
+`wwwroot/` or help-pages tree), a node the graph itself is missing, or
+something genuinely fine at repo level (dotfiles, solution files, vendored
+dependencies, deployment infra). Fix the first two kinds; leave the third.
+A healthy map lands roughly 85–95% mapped-beyond-repo per repo — if a repo
+is far below that, a whole area is missing.
+
 ## Rough is fine
 
-You do not need to get every glob perfectly scoped on this pass. Once
-you're running real releases through ChangeAtlas, its normal console output
-includes an "Unmapped beyond repo" section listing every changed file that
-matched a node's catch-all but no finer glob. That's your per-run signal
-for exactly where `config/component-globs.json` needs a new or wider
-pattern — let real usage refine the map instead of trying to guess every
-folder boundary up front.
+You do not need to get every glob perfectly scoped on this pass — the
+audit above catches the big gaps, and once you're running real releases
+through ChangeAtlas, its normal console output includes an "Unmapped
+beyond repo" section listing every changed file that matched a node's
+catch-all but no finer glob. That's your per-run signal for exactly where
+`config/component-globs.json` needs a new or wider pattern — let real
+usage refine the long tail instead of trying to guess every folder
+boundary up front.
 ````
