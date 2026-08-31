@@ -323,13 +323,16 @@ function buildListView() {
   const tiers = [["changed","Changed"],["touched","Touched"],
                  ["testOnly","Test-only"],["peripheral","Peripheral"]];
   const body = document.getElementById("list-view-body");
+  body.textContent = ""; // safe to re-enter: clear any rows from a prior throw
   for (const [key, label] of tiers) {
-    for (const id of DATA.impact[key]) {
+    // DATA.impact[key] || []: some tiers (e.g. touched/testOnly) are optional
+    // on the payload, same guard as the CHANGED/TOUCHED/... Sets above.
+    for (const id of DATA.impact[key] || []) {
       const d = DATA.details[id] || {stories: [], prs: [], prodFiles: 0, testFiles: 0};
       const node = DATA.nodes.find(n => n.id === id);
       const tr = document.createElement("tr");
       const links = list => list.map(x =>
-        `<a href="${x.url}">${escapeHtml("#" + x.id + " " + x.title)}</a>`).join("<br>");
+        `<a href="${escapeHtml(x.url)}">${escapeHtml("#" + x.id + " " + x.title)}</a>`).join("<br>");
       tr.innerHTML = `<th scope="row">${escapeHtml(node ? node.title : id)}</th>` +
         `<td>${label}</td><td>${d.prodFiles}</td><td>${d.testFiles}</td>` +
         `<td>${links(d.stories)}</td><td>${links(d.prs)}</td>`;
