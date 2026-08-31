@@ -154,7 +154,7 @@
     },
     {
       "id": "email-provider",
-      "title": "Mailjet-ish",
+      "title": "PostReach",
       "type": "external",
       "repo": "external",
       "summary": "Third-party transactional email provider used to deliver invoices.",
