@@ -51,9 +51,11 @@ display:inline-block;min-width:74px}
 button.reset{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px;width:100%}
 button.reset:hover{border-color:var(--accent)}
-button#view-toggle{background:var(--bg);color:var(--fg);border:1px solid var(--line);
+.views{display:flex;gap:6px;margin-top:8px}
+.views button{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
-button#view-toggle:hover{border-color:var(--accent)}
+.views button:hover{border-color:var(--accent)}
+.views button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
 #list-view{position:absolute;inset:0 340px 0 0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
@@ -82,7 +84,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
   </section>
   <aside class="side">
     <h1>/*__TITLE__*/<small id="stats"></small>
-      <button id="view-toggle" aria-pressed="false" style="margin-top:8px">List view</button>
+      <div class="views" role="group" aria-label="View">
+        <button id="view-impact" aria-pressed="true">Impact</button>
+        <button id="view-system" aria-pressed="false">System</button>
+        <button id="view-list" aria-pressed="false">List</button>
+      </div>
     </h1>
     <div class="controls">
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
@@ -125,16 +131,19 @@ const stateOf = id => CHANGED.has(id) ? 'changed'
                     : TOUCHED.has(id) ? 'touched'
                     : TESTONLY.has(id) ? 'testOnly'
                     : PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
-const baseOpacity = id => stateOf(id) === 'dimmed' ? 0.35 : 1;
+// Views: 'impact' (release shading, default), 'system' (plain architecture,
+// nodes coloured by type, no release overlay), 'list' (accessible table).
+let currentView = 'impact';
+const baseOpacity = id =>
+  currentView === 'system' ? 1 : (stateOf(id) === 'dimmed' ? 0.35 : 1);
 
 const byId = {};
 DATA.nodes.forEach(n => byId[n.id] = n);
 
-const visNodes = new vis.DataSet(DATA.nodes.map(n => {
-  const st = stateOf(n.id);
-  const tier = PALETTE.tiers[st]; // undefined for the 'dimmed' (untouched) state
+const NEUTRAL_TYPE = { label: '?', color: '#8a949e' };
+function impactNodeVisual(n) {
+  const tier = PALETTE.tiers[stateOf(n.id)]; // undefined for 'dimmed' (untouched)
   return {
-    id: n.id, label: n.title,
     color: tier
       ? { background: tier.fill, border: tier.border,
           highlight: { background: tier.fill, border: '#fff' } }
@@ -146,16 +155,35 @@ const visNodes = new vis.DataSet(DATA.nodes.map(n => {
     // default shapeProperties in its options merge and crashes node rendering.
     shapeProperties: { borderDashes: tier ? tier.borderDashes : false },
     opacity: baseOpacity(n.id),
-    value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
   };
-}));
+}
+function systemNodeVisual(n) {
+  const t = TS[n.type] || NEUTRAL_TYPE;
+  return {
+    color: { background: t.color, border: t.color,
+             highlight: { background: t.color, border: '#fff' } },
+    borderWidth: 1,
+    shapeProperties: { borderDashes: false },
+    opacity: 1,
+  };
+}
 const affected = id => stateOf(id) !== 'dimmed';
-const visEdges = new vis.DataSet(DATA.edges.map((e, i) => ({
-  id: 'e' + i, from: e.from, to: e.to, kind: e.kind, note: e.note || '',
-  color: (affected(e.from) && affected(e.to))
+function impactEdgeVisual(e) {
+  return { color: (affected(e.from) && affected(e.to))
     ? { color: '#8a5a3a', highlight: PALETTE.tiers.peripheral.fill, opacity: 0.9 }
-    : { color: '#2a323a', highlight: PALETTE.link, opacity: 0.4 },
-})));
+    : { color: '#2a323a', highlight: PALETTE.link, opacity: 0.4 } };
+}
+function systemEdgeVisual() {
+  return { color: { color: '#3d464f', highlight: PALETTE.link, opacity: 0.55 } };
+}
+
+const visNodes = new vis.DataSet(DATA.nodes.map(n => Object.assign({
+  id: n.id, label: n.title,
+  value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
+}, impactNodeVisual(n))));
+const visEdges = new vis.DataSet(DATA.edges.map((e, i) => Object.assign({
+  id: 'e' + i, from: e.from, to: e.to, kind: e.kind, note: e.note || '',
+}, impactEdgeVisual(e))));
 
 const container = document.getElementById('graph');
 const network = new vis.Network(container, { nodes: visNodes, edges: visEdges }, {
@@ -173,19 +201,41 @@ const counts = {
   peripheral: PERIPHERAL.size,
   dimmed: DATA.nodes.length - CHANGED.size - TOUCHED.size - TESTONLY.size - PERIPHERAL.size,
 };
-document.getElementById('stats').textContent =
-  'Generated ' + DATA.generated + ' · ' + counts.changed + ' changed · ' +
-  counts.touched + ' touched · ' + counts.testOnly + ' test-only · ' +
-  counts.peripheral + ' peripheral · ' + counts.dimmed + ' untouched';
+function buildStats() {
+  document.getElementById('stats').textContent = currentView === 'system'
+    ? DATA.nodes.length + ' components · ' + DATA.edges.length + ' dependencies'
+    : 'Generated ' + DATA.generated + ' · ' + counts.changed + ' changed · ' +
+      counts.touched + ' touched · ' + counts.testOnly + ' test-only · ' +
+      counts.peripheral + ' peripheral · ' + counts.dimmed + ' untouched';
+}
 const legend = document.getElementById('legend');
-Object.keys(IMPACT).forEach(k => {
+function legendChip(color, text) {
   const chip = document.createElement('div');
   chip.className = 'chip';
   chip.style.cursor = 'default';
-  chip.innerHTML = '<span class="dot" style="background:' + IMPACT[k].color + '"></span>' +
-    IMPACT[k].label + ' (' + counts[k] + ')';
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = color;   // property assignment: payload colours stay inert
+  chip.appendChild(dot);
+  chip.appendChild(document.createTextNode(' ' + text));
   legend.appendChild(chip);
-});
+}
+function buildLegend() {
+  legend.textContent = '';
+  if (currentView === 'system') {
+    const typeCounts = {};
+    DATA.nodes.forEach(n => typeCounts[n.type] = (typeCounts[n.type] || 0) + 1);
+    Object.keys(typeCounts).forEach(t => {
+      const ts = TS[t] || { label: t, color: NEUTRAL_TYPE.color };
+      legendChip(ts.color, ts.label + ' (' + typeCounts[t] + ')');
+    });
+  } else {
+    Object.keys(IMPACT).forEach(k =>
+      legendChip(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')'));
+  }
+}
+buildStats();
+buildLegend();
 
 // ---- search datalist ----
 const dl = document.getElementById('nodelist');
@@ -245,16 +295,19 @@ function showNode(id) {
   // Unknown/future node types fall back to a plain neutral badge instead of
   // throwing on TS[n.type] being undefined.
   const typeStyle = TS[n.type] || { label: n.type, color: '#8a949e' };
+  // System view: architecture only — no tier badge, no release sections below.
+  const tierBadge = currentView === 'system' ? '' :
+    ' <span class="badge" style="background:' + IMPACT[stateOf(id)].color + '">' +
+    IMPACT[stateOf(id)].label + '</span>';
   h += '<div class="meta"><span class="badge" style="background:' + typeStyle.color + '">' +
-       esc(typeStyle.label) + '</span> <span class="badge" style="background:' +
-       IMPACT[stateOf(id)].color + '">' + IMPACT[stateOf(id)].label + '</span>' +
+       esc(typeStyle.label) + '</span>' + tierBadge +
        (n.repo ? ' &nbsp;' + esc(n.repo) : '') + '</div>';
   h += '<blockquote>' + esc(n.summary) + '</blockquote>';
   if (out.length) h += '<h4>Depends on / contains</h4><ul>' +
     out.map(e => row(e.to, e.kind, e.note, 'out')).join('') + '</ul>';
   if (inc.length) h += '<h4>Used by</h4><ul>' +
     inc.map(e => row(e.from, e.kind, e.note, 'in')).join('') + '</ul>';
-  const det = DATA.details[id];
+  const det = currentView === 'system' ? null : DATA.details[id];
   if (det && (det.prodFiles || det.testFiles)) {
     h += '<h4>Change size</h4><ul><li>' + det.prodFiles + ' production file(s), ' +
          det.testFiles + ' test file(s) changed</li></ul>';
@@ -271,7 +324,7 @@ function showNode(id) {
       '<a href="' + esc(safeUrl(p.url)) + '" target="_blank">!' + p.id + ' ' + esc(p.title) + '</a></li>'
     ).join('') + '</ul>';
   }
-  if (stateOf(id) === 'peripheral') {
+  if (currentView !== 'system' && stateOf(id) === 'peripheral') {
     const near = network.getConnectedNodes(id).filter(o => CHANGED.has(o));
     if (near.length) {
       h += '<h4>Connected changed components</h4><ul>' + near.map(o =>
@@ -351,14 +404,33 @@ function buildListView() {
     }
   }
 }
-document.getElementById("view-toggle").addEventListener("click", function () {
-  const lv = document.getElementById("list-view");
-  const showing = lv.hidden;
-  lv.hidden = !showing;
-  this.setAttribute("aria-pressed", String(showing));
-  this.textContent = showing ? "Graph view" : "List view";
-  if (showing && !lv.dataset.built) { buildListView(); lv.dataset.built = "1"; }
-});
+// ---- view switching: Impact | System | List ----
+const viewButtons = {
+  impact: document.getElementById('view-impact'),
+  system: document.getElementById('view-system'),
+  list:   document.getElementById('view-list'),
+};
+function setView(v) {
+  if (v === currentView) return;
+  currentView = v;
+  Object.keys(viewButtons).forEach(k =>
+    viewButtons[k].setAttribute('aria-pressed', String(k === v)));
+  const lv = document.getElementById('list-view');
+  lv.hidden = v !== 'list';
+  if (v === 'list' && !lv.dataset.built) { buildListView(); lv.dataset.built = '1'; }
+  if (v !== 'list') {
+    const nodeVisual = v === 'system' ? systemNodeVisual : impactNodeVisual;
+    visNodes.update(DATA.nodes.map(n => Object.assign({ id: n.id }, nodeVisual(n))));
+    visEdges.update(DATA.edges.map((e, i) => Object.assign(
+      { id: 'e' + i }, v === 'system' ? systemEdgeVisual() : impactEdgeVisual(e))));
+    if (selected) showNode(selected); // re-render panel with/without release info
+  }
+  buildStats();
+  buildLegend();
+}
+viewButtons.impact.addEventListener('click', () => setView('impact'));
+viewButtons.system.addEventListener('click', () => setView('system'));
+viewButtons.list.addEventListener('click', () => setView('list'));
 </script>
 </body>
 </html>

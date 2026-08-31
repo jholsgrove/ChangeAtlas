@@ -15,9 +15,18 @@ def _render():
 def test_lang_attribute():
     assert 'lang="en"' in _render()
 
-def test_list_view_scaffolding_present():
+def test_view_control_scaffolding_present():
     html = _render()
-    assert 'id="view-toggle"' in html and 'id="list-view"' in html
+    for frag in ('id="view-impact"', 'id="view-system"', 'id="view-list"',
+                 'id="list-view"', 'role="group" aria-label="View"'):
+        assert frag in html
+
+def test_system_view_wiring_present():
+    html = _render()
+    assert "systemNodeVisual" in html and "impactNodeVisual" in html
+    assert "setView('system')" in html or 'setView("system")' in html
+    # System view derives node colours from the payload's typeStyle map.
+    assert "TS[n.type]" in html
 
 def test_tier_labels_in_legend():
     html = _render()
