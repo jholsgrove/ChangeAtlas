@@ -9,7 +9,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
 font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
-#app{display:flex;height:100%}
+#app{display:flex;height:100%;position:relative}
 #graph{flex:1;height:100%;background:var(--bg)}
 .side{width:340px;flex:0 0 340px;border-left:1px solid var(--line);
 background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
@@ -51,13 +51,39 @@ display:inline-block;min-width:74px}
 button.reset{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px;width:100%}
 button.reset:hover{border-color:var(--accent)}
+button#view-toggle{background:var(--bg);color:var(--fg);border:1px solid var(--line);
+border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
+button#view-toggle:hover{border-color:var(--accent)}
+#list-view{position:absolute;inset:0 340px 0 0;background:var(--bg);overflow:auto;
+padding:16px 18px}
+#list-view[hidden]{display:none}
+#list-view table{width:100%;border-collapse:collapse;font-size:13px}
+#list-view caption{text-align:left;color:var(--fg);font-size:15px;padding-bottom:10px}
+#list-view th,#list-view td{border-bottom:1px solid var(--line);padding:6px 8px;
+text-align:left;vertical-align:top}
+#list-view thead th{color:var(--muted);font-size:11px;text-transform:uppercase;
+letter-spacing:.04em}
+#list-view a{color:var(--accent);text-decoration:none}
+#list-view a:hover{text-decoration:underline}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="graph"></div>
+  <div id="graph" tabindex="-1"></div>
+  <section id="list-view" hidden aria-label="Impacted components as a table">
+    <table>
+      <caption>Impacted components</caption>
+      <thead><tr><th scope="col">Component</th><th scope="col">Tier</th>
+        <th scope="col">Prod files</th><th scope="col">Test files</th>
+        <th scope="col">Stories</th><th scope="col">Pull requests</th></tr></thead>
+      <tbody id="list-view-body"></tbody>
+    </table>
+  </section>
   <aside class="side">
-    <h1>/*__TITLE__*/<small id="stats"></small></h1>
+    <h1>/*__TITLE__*/<small id="stats"></small>
+      <button id="view-toggle" aria-pressed="false" style="margin-top:8px">List view</button>
+    </h1>
     <div class="controls">
       <input id="search" list="nodelist" placeholder="Search components…" autocomplete="off">
       <datalist id="nodelist"></datalist>
@@ -104,14 +130,23 @@ const baseOpacity = id => stateOf(id) === 'dimmed' ? 0.35 : 1;
 const byId = {};
 DATA.nodes.forEach(n => byId[n.id] = n);
 
-const visNodes = new vis.DataSet(DATA.nodes.map(n => ({
-  id: n.id, label: n.title,
-  color: { background: IMPACT[stateOf(n.id)].color,
-           border: IMPACT[stateOf(n.id)].color,
-           highlight: { background: IMPACT[stateOf(n.id)].color, border: '#fff' } },
-  opacity: baseOpacity(n.id),
-  value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
-})));
+const visNodes = new vis.DataSet(DATA.nodes.map(n => {
+  const st = stateOf(n.id);
+  const tier = PALETTE.tiers[st]; // undefined for the 'dimmed' (untouched) state
+  return {
+    id: n.id, label: n.title,
+    color: tier
+      ? { background: tier.fill, border: tier.border,
+          highlight: { background: tier.fill, border: '#fff' } }
+      : { background: IMPACT.dimmed.color, border: IMPACT.dimmed.color,
+          highlight: { background: IMPACT.dimmed.color, border: '#fff' } },
+    borderWidth: tier ? 2 : 1,
+    // WCAG 1.4.1: tiers are distinguished by border pattern, not colour alone.
+    shapeProperties: tier ? { borderDashes: tier.borderDashes } : undefined,
+    opacity: baseOpacity(n.id),
+    value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
+  };
+}));
 const affected = id => stateOf(id) !== 'dimmed';
 const visEdges = new vis.DataSet(DATA.edges.map((e, i) => ({
   id: 'e' + i, from: e.from, to: e.to, kind: e.kind, note: e.note || '',
@@ -197,6 +232,7 @@ function showNode(id) {
   selected = id;
   const { out, inc } = edgesFor(id);
   let h = '<div class="detail">';
+  h += '<button type="button" class="reset" id="detail-close">Close details</button>';
   h += '<h2>' + esc(n.title) + '</h2>';
   h += '<div class="meta"><span class="badge" style="background:' + TS[n.type].color + '">' +
        TS[n.type].label + '</span> <span class="badge" style="background:' +
@@ -235,8 +271,22 @@ function showNode(id) {
   detail.innerHTML = h;
   detail.querySelectorAll('a[data-id]').forEach(a =>
     a.onclick = () => focusNode(a.getAttribute('data-id')));
+  const closeBtn = document.getElementById('detail-close');
+  if (closeBtn) closeBtn.onclick = closeDetail;
   spotlight(neighbours(id));
+  // Focus management (WCAG 2.4.3): move focus into the panel that just opened.
+  detail.setAttribute('tabindex', '-1');
+  detail.focus();
 }
+function closeDetail() {
+  selected = null;
+  clearSpotlight();
+  detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
+  container.focus();
+}
+detail.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape') closeDetail();
+});
 function focusNode(id) {
   network.selectNodes([id]);
   network.focus(id, { scale: 1.1, animation: { duration: 400 } });
@@ -244,8 +294,7 @@ function focusNode(id) {
 }
 network.on('click', p => {
   if (p.nodes.length) showNode(p.nodes[0]);
-  else { selected = null; clearSpotlight();
-    detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>'; }
+  else closeDetail();
 });
 
 // ---- search ----
@@ -265,6 +314,37 @@ document.getElementById('reset').onclick = () => {
   network.fit({ animation: { duration: 500 } });
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
 };
+
+// ---- accessible list view (WCAG 1.1.1 / 1.4.1: non-canvas equivalent of the graph) ----
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function buildListView() {
+  const tiers = [["changed","Changed"],["touched","Touched"],
+                 ["testOnly","Test-only"],["peripheral","Peripheral"]];
+  const body = document.getElementById("list-view-body");
+  for (const [key, label] of tiers) {
+    for (const id of DATA.impact[key]) {
+      const d = DATA.details[id] || {stories: [], prs: [], prodFiles: 0, testFiles: 0};
+      const node = DATA.nodes.find(n => n.id === id);
+      const tr = document.createElement("tr");
+      const links = list => list.map(x =>
+        `<a href="${x.url}">${escapeHtml("#" + x.id + " " + x.title)}</a>`).join("<br>");
+      tr.innerHTML = `<th scope="row">${escapeHtml(node ? node.title : id)}</th>` +
+        `<td>${label}</td><td>${d.prodFiles}</td><td>${d.testFiles}</td>` +
+        `<td>${links(d.stories)}</td><td>${links(d.prs)}</td>`;
+      body.appendChild(tr);
+    }
+  }
+}
+document.getElementById("view-toggle").addEventListener("click", function () {
+  const lv = document.getElementById("list-view");
+  const showing = lv.hidden;
+  lv.hidden = !showing;
+  this.setAttribute("aria-pressed", String(showing));
+  this.textContent = showing ? "Graph view" : "List view";
+  if (showing && !lv.dataset.built) { buildListView(); lv.dataset.built = "1"; }
+});
 </script>
 </body>
 </html>
