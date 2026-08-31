@@ -1,6 +1,5 @@
-"""anonymize.py — screenshot/demo-safe payload: real names, ids, titles and
-ADO links replaced with generic tokens; topology, types, tiers and change
-sizes preserved. Mirrors QaWiki's web-graph anonymizer."""
+"""anonymize.py — demo-safe anonymization: generic node/story/PR names, dead
+links on reserved .example TLD, topology/types/tiers/change-sizes preserved."""
 import string
 
 from . import mapping

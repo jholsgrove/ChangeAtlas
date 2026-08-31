@@ -30,22 +30,22 @@ PAYLOAD = {
         "auth-microservice": {
             "stories": [{"id": 43900, "type": "User Story",
                          "title": "Login flow improvement", "url": "https://dev.azure.com/x"}],
-            "prs": [{"id": 13277, "title": "Refactor auth handler", "repo": "Core Service",
+            "prs": [{"id": 13277, "title": "Refactor auth handler", "repo": "Service.Core",
                      "url": "https://dev.azure.com/x/pr"}],
             "prodFiles": 3, "testFiles": 1},
         "shop-checkout": {
             "stories": [{"id": 43900, "type": "User Story",
                          "title": "Login flow improvement", "url": "https://dev.azure.com/x"}],
-            "prs": [{"id": 13299, "title": "Update checkout UI", "repo": "Shop Web",
+            "prs": [{"id": 13299, "title": "Update checkout UI", "repo": "Shop.Web",
                      "url": "https://dev.azure.com/x/pr2"}],
             "prodFiles": 1, "testFiles": 0},
     },
 }
 
 SECRETS = ["auth-microservice", "Authentication Service", "Handles user authentication",
-           "Core Service", "Checkout Flow", "Login flow improvement",
+           "Checkout Flow", "Login flow improvement",
            "Refactor auth handler", "Update checkout UI", "dev.azure.com", "43900", "13277",
-           "internal dependency", "service-core"]
+           "internal dependency", "service-core", "Service.Core", "Shop.Web"]
 
 
 def test_no_original_identifiers_survive():
@@ -87,7 +87,7 @@ def test_fake_urls_look_real_but_use_reserved_domain():
     d = out["details"][changed_id]
     s, p = d["stories"][0], d["prs"][0]
     assert s["url"] == f"https://dev.azure.example/demo-org/Platform/_workitems/edit/{s['id']}"
-    slug = p["repo"].lower().replace(" ", "-")   # "Repo A" -> "repo-a"
+    slug = p["repo"].lower().replace(" ", "-")   # generic repo label like "Repo A" -> "repo-a"
     assert p["url"] == (f"https://dev.azure.example/demo-org/Platform/_git/{slug}"
                         f"/pullrequest/{p['id']}")
     # ADO-shaped, but never the real domain
