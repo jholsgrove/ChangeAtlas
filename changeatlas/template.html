@@ -142,7 +142,9 @@ const visNodes = new vis.DataSet(DATA.nodes.map(n => {
           highlight: { background: IMPACT.dimmed.color, border: '#fff' } },
     borderWidth: tier ? 2 : 1,
     // WCAG 1.4.1: tiers are distinguished by border pattern, not colour alone.
-    shapeProperties: tier ? { borderDashes: tier.borderDashes } : undefined,
+    // Always a real object: an explicit `undefined` clobbers vis-network's
+    // default shapeProperties in its options merge and crashes node rendering.
+    shapeProperties: { borderDashes: tier ? tier.borderDashes : false },
     opacity: baseOpacity(n.id),
     value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
   };

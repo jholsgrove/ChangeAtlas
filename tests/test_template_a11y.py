@@ -27,6 +27,14 @@ def test_tier_labels_in_legend():
 def test_borderdashes_used_by_canvas():
     assert "borderDashes" in _render()
 
+def test_shape_properties_never_explicit_undefined():
+    # Regression: an explicit `shapeProperties: undefined` on dimmed nodes
+    # clobbers vis-network's default options object and crashes node
+    # rendering (blank map, edges only). Every node must pass a real object.
+    html = _render()
+    assert "shapeProperties: { borderDashes: tier ? tier.borderDashes : false }" in html
+    assert "shapeProperties: tier ?" not in html
+
 def test_build_list_view_guards_missing_tier_keys():
     # Regression for fix round 1: buildListView() iterates all four tier keys
     # ("changed", "touched", "testOnly", "peripheral"), but a payload may
