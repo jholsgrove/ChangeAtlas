@@ -13,6 +13,7 @@ sample/graph-data.json + sample/component-globs.json:
                   one changed node (checkout-flow) via the http and
                   project-ref edges
 """
+import json
 import re
 from pathlib import Path
 
@@ -35,11 +36,24 @@ def test_sample_end_to_end(capsys):
     assert re.search(r"1 changed", out)
     assert re.search(r"2 touched", out)
     assert re.search(r"1 test-only", out)
+    # MUST-FIX 10: the peripheral count is also part of the designed tier
+    # truth (orders-api, web-api-client) -- assert it, not just presence.
+    assert re.search(r"2 peripheral", out)
 
     # All three tiered nodes reach the rendered payload.
     assert "checkout-flow" in html
     assert "pricing-engine" in html
     assert "orders-db" in html
+
+    # MUST-FIX 10: a vacuous "orders-db" in html substring check would pass
+    # even if orders-db were wired into the wrong tier (or just sitting in
+    # the untouched node list). Parse the embedded DATA payload out of the
+    # rendered HTML and confirm orders-db is actually in impact.touched.
+    prefix = "const DATA = "
+    start = html.index(prefix) + len(prefix)
+    data, _ = json.JSONDecoder().raw_decode(html[start:])
+    assert "orders-db" in data["impact"]["touched"]
+    assert "checkout-flow" in data["impact"]["changed"]
 
     # Demo-safe, non-real tracker domain used throughout the sample data.
     assert "tracker.example" in html
