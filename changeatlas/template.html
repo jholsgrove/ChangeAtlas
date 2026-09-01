@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>/*__TITLE__*/</title>
 <style>
-:root{--bg:#0f1419;--panel:#161c22;--line:#232a31;--fg:#d7dde3;--muted:#8a949e;--accent:#4a9eea;}
+:root{--bg:#0f1419;--panel:#161c22;--line:#232a31;--fg:#d7dde3;--muted:#8a949e;--accent:#4a9eea;--badge-text:#0b0e11;}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
 font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
@@ -13,22 +13,34 @@ font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:
 #graph{flex:1;height:100%;background:var(--bg)}
 .side{width:340px;flex:0 0 340px;border-left:1px solid var(--line);
 background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
-.side .pad{padding:16px 18px;overflow:auto}
+.side .pad{padding:16px 18px;overflow:auto;flex:1}
 h1{font-size:15px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line);
 letter-spacing:.02em}
 h1 small{color:var(--muted);font-weight:400;font-size:12px;display:block;margin-top:2px}
+.brand{display:flex;align-items:flex-start;gap:10px}
+.brand > div{flex:1;min-width:0}
+#logo{width:36px;height:36px;border-radius:8px;flex:0 0 36px}
+#theme-toggle{background:var(--bg);color:var(--fg);border:1px solid var(--line);
+border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;flex:0 0 auto}
+#theme-toggle:hover{border-color:var(--accent)}
+.side footer{border-top:1px solid var(--line);padding:10px 18px;font-size:12px;
+color:var(--muted);flex:0 0 auto}
+.side footer a{color:var(--accent);text-decoration:none}
+.side footer a:hover{text-decoration:underline}
 .controls{padding:12px 18px;border-bottom:1px solid var(--line)}
 .controls input,.controls select{width:100%;margin-bottom:8px;padding:7px 9px;
 background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;font-size:13px}
 .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .chip{display:flex;align-items:center;gap:6px;padding:3px 8px;border:1px solid var(--line);
-border-radius:20px;cursor:pointer;font-size:12px;user-select:none;transition:opacity .15s}
+border-radius:20px;cursor:pointer;font:inherit;font-size:12px;user-select:none;
+transition:opacity .15s;background:none;color:var(--fg)}
+.chip:hover{border-color:var(--accent)}
 .chip.off{opacity:.35}
 .chip .dot{width:10px;height:10px;border-radius:50%}
 .detail h2{font-size:16px;margin:.2em 0}
 .detail .meta{color:var(--muted);font-size:12px;margin-bottom:10px}
 .detail .badge{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11px;
-color:#0b0e11;font-weight:600}
+color:var(--badge-text);font-weight:600}
 .detail blockquote{margin:0 0 14px;padding:.5em .9em;border-left:3px solid var(--accent);
 background:var(--bg);color:var(--fg);border-radius:0 6px 6px 0}
 .detail h4{text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--muted);
@@ -83,7 +95,13 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     </table>
   </section>
   <aside class="side">
-    <h1>/*__TITLE__*/<small id="stats"></small>
+    <h1>
+      <div class="brand">
+        <img id="logo" alt="" width="36" height="36">
+        <div>/*__TITLE__*/<small id="stats"></small></div>
+        <button id="theme-toggle" type="button" aria-pressed="false"
+                aria-label="Light theme">☀️</button>
+      </div>
       <div class="views" role="group" aria-label="View">
         <button id="view-impact" aria-pressed="true">Impact</button>
         <button id="view-system" aria-pressed="false">System</button>
@@ -100,29 +118,39 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       <div class="detail" id="detail"><p class="empty">Select a node to see what it does and what it connects to.</p></div>
       <button class="reset" id="reset" style="margin-top:14px">Reset view</button>
     </div>
+    <footer><a href="https://github.com/jholsgrove/ChangeAtlas" target="_blank"
+      rel="noopener">ChangeAtlas on GitHub</a></footer>
   </aside>
 </div>
 <script>/*__VISLIB__*/</script>
 <script>
-const PALETTE = /*__PALETTE__*/;
-// Colour constants below all read from PALETTE (single source of colour truth,
-// WCAG-audited in changeatlas/palette.py). Push the palette into the CSS
-// custom properties the stylesheet above is already keyed on.
-document.documentElement.style.setProperty('--bg', PALETTE.bg);
-document.documentElement.style.setProperty('--panel', PALETTE.panel_bg);
-document.documentElement.style.setProperty('--fg', PALETTE.text);
-document.documentElement.style.setProperty('--muted', PALETTE.muted_text);
-document.documentElement.style.setProperty('--accent', PALETTE.link);
+// Both theme palettes (single source of colour truth, WCAG-audited per theme
+// in changeatlas/palette.py). PALETTE always points at the active theme's
+// palette; every colour below reads from it so applyTheme() can re-skin the
+// whole report — CSS custom properties, graph nodes/edges, badges, legend.
+const PALETTES = /*__PALETTES__*/;
+const LOGO_LIGHT = '/*__LOGO_LIGHT__*/', LOGO_DARK = '/*__LOGO_DARK__*/';
+const THEME_KEY = 'changeatlas-theme';
+let theme = null;
+try { theme = localStorage.getItem(THEME_KEY); } catch (e) { /* storage blocked */ }
+if (theme !== 'light' && theme !== 'dark') {
+  theme = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+let PALETTE = PALETTES[theme];
 
 const DATA = /*__DATA__*/;
 const TS = DATA.typeStyle, EL = DATA.edgeLabel;
-const IMPACT = {
-  changed:    { color: PALETTE.tiers.changed.fill,    label: PALETTE.tiers.changed.label },
-  touched:    { color: PALETTE.tiers.touched.fill,    label: PALETTE.tiers.touched.label },
-  testOnly:   { color: PALETTE.tiers.testOnly.fill,   label: PALETTE.tiers.testOnly.label },
-  peripheral: { color: PALETTE.tiers.peripheral.fill, label: PALETTE.tiers.peripheral.label },
-  dimmed:     { color: '#3a3f44', label: 'Untouched' },
-};
+let IMPACT;
+function buildImpact() {
+  IMPACT = {
+    changed:    { color: PALETTE.tiers.changed.fill,    label: PALETTE.tiers.changed.label },
+    touched:    { color: PALETTE.tiers.touched.fill,    label: PALETTE.tiers.touched.label },
+    testOnly:   { color: PALETTE.tiers.testOnly.fill,   label: PALETTE.tiers.testOnly.label },
+    peripheral: { color: PALETTE.tiers.peripheral.fill, label: PALETTE.tiers.peripheral.label },
+    dimmed:     { color: PALETTE.dimmed, label: 'Untouched' },
+  };
+}
+buildImpact();
 const CHANGED = new Set(DATA.impact.changed);
 const TOUCHED = new Set(DATA.impact.touched || []);
 const TESTONLY = new Set(DATA.impact.testOnly || []);
@@ -134,21 +162,39 @@ const stateOf = id => CHANGED.has(id) ? 'changed'
 // Views: 'impact' (release shading, default), 'system' (plain architecture,
 // nodes coloured by type, no release overlay), 'list' (accessible table).
 let currentView = 'impact';
-const baseOpacity = id =>
-  currentView === 'system' ? 1 : (stateOf(id) === 'dimmed' ? 0.35 : 1);
+// Legend pill filters: a filtered tier/type is dimmed in place, never removed.
+const filteredTiers = new Set(), filteredTypes = new Set();
+const effectiveState = id => {
+  const s = stateOf(id);
+  return s !== 'dimmed' && filteredTiers.has(s) ? 'dimmed' : s;
+};
+const baseOpacity = id => {
+  if (currentView === 'system') return filteredTypes.has(byId[id].type) ? 0.35 : 1;
+  if (stateOf(id) === 'dimmed')
+    return filteredTiers.has('dimmed') ? 0.12 : 0.35; // filtered untouched: near-invisible
+  return effectiveState(id) === 'dimmed' ? 0.35 : 1;
+};
 
 const byId = {};
 DATA.nodes.forEach(n => byId[n.id] = n);
 
 const NEUTRAL_TYPE = { label: '?', color: '#8a949e' };
+// Type colours are theme-specific (light needs darker fills for contrast):
+// prefer the active palette's type_colors, fall back to the payload's
+// typeStyle colour, then neutral.
+function typeColor(t) {
+  return (PALETTE.type_colors && PALETTE.type_colors[t])
+      || (TS[t] && TS[t].color) || NEUTRAL_TYPE.color;
+}
 function impactNodeVisual(n) {
-  const tier = PALETTE.tiers[stateOf(n.id)]; // undefined for 'dimmed' (untouched)
+  const tier = PALETTE.tiers[effectiveState(n.id)]; // undefined for 'dimmed' (untouched or filtered)
+  const hi = PALETTE.node_highlight_border;
   return {
     color: tier
       ? { background: tier.fill, border: tier.border,
-          highlight: { background: tier.fill, border: '#fff' } }
+          highlight: { background: tier.fill, border: hi } }
       : { background: IMPACT.dimmed.color, border: IMPACT.dimmed.color,
-          highlight: { background: IMPACT.dimmed.color, border: '#fff' } },
+          highlight: { background: IMPACT.dimmed.color, border: hi } },
     borderWidth: tier ? 2 : 1,
     // WCAG 1.4.1: tiers are distinguished by border pattern, not colour alone.
     // Always a real object: an explicit `undefined` clobbers vis-network's
@@ -158,23 +204,26 @@ function impactNodeVisual(n) {
   };
 }
 function systemNodeVisual(n) {
-  const t = TS[n.type] || NEUTRAL_TYPE;
+  const c = filteredTypes.has(n.type) ? PALETTE.dimmed : typeColor(n.type);
   return {
-    color: { background: t.color, border: t.color,
-             highlight: { background: t.color, border: '#fff' } },
+    color: { background: c, border: c,
+             highlight: { background: c, border: PALETTE.node_highlight_border } },
     borderWidth: 1,
     shapeProperties: { borderDashes: false },
-    opacity: 1,
+    opacity: baseOpacity(n.id),
   };
 }
-const affected = id => stateOf(id) !== 'dimmed';
+const affected = id => effectiveState(id) !== 'dimmed';
 function impactEdgeVisual(e) {
   return { color: (affected(e.from) && affected(e.to))
-    ? { color: '#8a5a3a', highlight: PALETTE.tiers.peripheral.fill, opacity: 0.9 }
-    : { color: '#2a323a', highlight: PALETTE.link, opacity: 0.4 } };
+    ? { color: PALETTE.edge_affected, highlight: PALETTE.tiers.peripheral.fill, opacity: 0.9 }
+    : { color: PALETTE.edge_dim, highlight: PALETTE.link, opacity: 0.4 } };
 }
-function systemEdgeVisual() {
-  return { color: { color: '#3d464f', highlight: PALETTE.link, opacity: 0.55 } };
+function systemEdgeVisual(e) {
+  const clear = !filteredTypes.has(byId[e.from].type) && !filteredTypes.has(byId[e.to].type);
+  return { color: clear
+    ? { color: PALETTE.edge_system, highlight: PALETTE.link, opacity: 0.55 }
+    : { color: PALETTE.edge_dim, highlight: PALETTE.link, opacity: 0.4 } };
 }
 
 const visNodes = new vis.DataSet(DATA.nodes.map(n => Object.assign({
@@ -209,16 +258,27 @@ function buildStats() {
       counts.peripheral + ' peripheral · ' + counts.dimmed + ' untouched';
 }
 const legend = document.getElementById('legend');
-function legendChip(color, text) {
-  const chip = document.createElement('div');
+// Each chip is a toggle button: pressing it sends its tier/type to the dimmed
+// treatment (nodes stay on the map, just recede); pressing again restores it.
+function legendChip(color, text, off, onToggle) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
   chip.className = 'chip';
-  chip.style.cursor = 'default';
+  chip.setAttribute('aria-pressed', String(!off));
+  if (off) chip.classList.add('off');
   const dot = document.createElement('span');
   dot.className = 'dot';
   dot.style.background = color;   // property assignment: payload colours stay inert
   chip.appendChild(dot);
   chip.appendChild(document.createTextNode(' ' + text));
+  chip.addEventListener('click', onToggle);
   legend.appendChild(chip);
+}
+function toggleFilter(set, key) {
+  if (set.has(key)) set.delete(key); else set.add(key);
+  refreshVisuals();
+  buildLegend();
+  if (selected) spotlight(neighbours(selected)); // keep an open selection spotlit
 }
 function buildLegend() {
   legend.textContent = '';
@@ -227,11 +287,13 @@ function buildLegend() {
     DATA.nodes.forEach(n => typeCounts[n.type] = (typeCounts[n.type] || 0) + 1);
     Object.keys(typeCounts).forEach(t => {
       const ts = TS[t] || { label: t, color: NEUTRAL_TYPE.color };
-      legendChip(ts.color, ts.label + ' (' + typeCounts[t] + ')');
+      legendChip(typeColor(t), ts.label + ' (' + typeCounts[t] + ')',
+        filteredTypes.has(t), () => toggleFilter(filteredTypes, t));
     });
   } else {
     Object.keys(IMPACT).forEach(k =>
-      legendChip(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')'));
+      legendChip(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')',
+        filteredTiers.has(k), () => toggleFilter(filteredTiers, k)));
   }
 }
 buildStats();
@@ -299,7 +361,7 @@ function showNode(id) {
   const tierBadge = currentView === 'system' ? '' :
     ' <span class="badge" style="background:' + IMPACT[stateOf(id)].color + '">' +
     IMPACT[stateOf(id)].label + '</span>';
-  h += '<div class="meta"><span class="badge" style="background:' + typeStyle.color + '">' +
+  h += '<div class="meta"><span class="badge" style="background:' + typeColor(n.type) + '">' +
        esc(typeStyle.label) + '</span>' + tierBadge +
        (n.repo ? ' &nbsp;' + esc(n.repo) : '') + '</div>';
   h += '<blockquote>' + esc(n.summary) + '</blockquote>';
@@ -373,7 +435,11 @@ document.getElementById('search').addEventListener('change', ev => {
 // ---- reset ----
 document.getElementById('reset').onclick = () => {
   selected = null;
-  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: false, opacity: baseOpacity(n.id) })));
+  filteredTiers.clear();
+  filteredTypes.clear();
+  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: false })));
+  refreshVisuals();
+  buildLegend();
   network.unselectAll();
   network.fit({ animation: { duration: 500 } });
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
@@ -419,18 +485,56 @@ function setView(v) {
   lv.hidden = v !== 'list';
   if (v === 'list' && !lv.dataset.built) { buildListView(); lv.dataset.built = '1'; }
   if (v !== 'list') {
-    const nodeVisual = v === 'system' ? systemNodeVisual : impactNodeVisual;
-    visNodes.update(DATA.nodes.map(n => Object.assign({ id: n.id }, nodeVisual(n))));
-    visEdges.update(DATA.edges.map((e, i) => Object.assign(
-      { id: 'e' + i }, v === 'system' ? systemEdgeVisual() : impactEdgeVisual(e))));
+    refreshVisuals();
     if (selected) showNode(selected); // re-render panel with/without release info
   }
   buildStats();
   buildLegend();
 }
+function refreshVisuals() {
+  const system = currentView === 'system';
+  const nodeVisual = system ? systemNodeVisual : impactNodeVisual;
+  visNodes.update(DATA.nodes.map(n => Object.assign({ id: n.id }, nodeVisual(n))));
+  visEdges.update(DATA.edges.map((e, i) => Object.assign(
+    { id: 'e' + i }, system ? systemEdgeVisual(e) : impactEdgeVisual(e))));
+}
 viewButtons.impact.addEventListener('click', () => setView('impact'));
 viewButtons.system.addEventListener('click', () => setView('system'));
 viewButtons.list.addEventListener('click', () => setView('list'));
+
+// ---- theme: dark | light (default follows prefers-color-scheme) ----
+function applyTheme(t) {
+  theme = t;
+  PALETTE = PALETTES[t];
+  buildImpact();
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty('--bg', PALETTE.bg);
+  rootStyle.setProperty('--panel', PALETTE.panel_bg);
+  rootStyle.setProperty('--line', PALETTE.line);
+  rootStyle.setProperty('--fg', PALETTE.text);
+  rootStyle.setProperty('--muted', PALETTE.muted_text);
+  rootStyle.setProperty('--accent', PALETTE.link);
+  rootStyle.setProperty('--badge-text', PALETTE.badge_text);
+  document.getElementById('logo').src = t === 'light' ? LOGO_LIGHT : LOGO_DARK;
+  const btn = document.getElementById('theme-toggle');
+  btn.setAttribute('aria-pressed', String(t === 'light'));
+  btn.textContent = t === 'light' ? '🌙' : '☀️';
+  network.setOptions({ nodes: { font: { color: PALETTE.text } } });
+  refreshVisuals();
+  buildStats();
+  buildLegend();
+  if (selected) {
+    const focused = document.activeElement;
+    showNode(selected); // re-render badges/spotlight in the new theme
+    if (focused && focused.id === 'theme-toggle') focused.focus();
+  }
+}
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const next = theme === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* storage blocked */ }
+  applyTheme(next);
+});
+applyTheme(theme); // initial paint: CSS vars, logo, toggle state
 </script>
 </body>
 </html>

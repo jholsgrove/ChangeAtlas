@@ -101,6 +101,84 @@ def test_safe_url_helper_present_and_used():
     assert "escapeHtml(safeUrl(x.url))" in html
 
 
+def test_theme_toggle_scaffolding_present():
+    html = _render()
+    assert 'id="theme-toggle"' in html
+    assert 'aria-pressed' in html
+    # Default theme follows the OS; explicit choice persists per viewer.
+    assert "prefers-color-scheme" in html
+    assert "localStorage" in html
+
+
+def test_theme_recolours_graph_from_palette():
+    html = _render()
+    # The template must read chrome colours from the active theme palette,
+    # not hard-code them (they differ per theme and are WCAG-gated in
+    # tests/test_palette.py).
+    assert "PALETTES" in html
+    for frag in ("dimmed", "edge_affected", "edge_dim", "edge_system",
+                 "badge_text", "type_colors"):
+        assert frag in html, frag
+
+
+def test_logo_present_and_decorative():
+    html = _render()
+    assert 'id="logo"' in html
+    assert 'alt=""' in html   # decorative: the title text names the tool
+
+
+def test_footer_github_link():
+    html = _render()
+    assert "<footer" in html
+    assert 'href="https://github.com/jholsgrove/ChangeAtlas"' in html
+    assert 'rel="noopener"' in html
+
+
+def test_legend_chips_are_toggleable_buttons():
+    html = _render()
+    # Chips are real <button>s with a visible + accessible pressed state.
+    assert "document.createElement('button')" in html
+    assert "chip.setAttribute('aria-pressed'" in html
+    assert "chip.classList.add('off')" in html
+
+
+def test_legend_filters_dim_rather_than_hide():
+    html = _render()
+    # Toggling a pill sends that tier/type to the dimmed treatment — nodes are
+    # never removed from the graph.
+    assert "filteredTiers" in html and "filteredTypes" in html
+    # Impact node fills key off the filtered ("effective") state...
+    assert "PALETTE.tiers[effectiveState(n.id)]" in html
+    # ...and edges into a filtered node drop to the dim colour too.
+    assert "effectiveState(id) !== 'dimmed'" in html
+
+
+def test_reset_clears_legend_filters():
+    html = _render()
+    assert "filteredTiers.clear()" in html
+    assert "filteredTypes.clear()" in html
+
+
+def test_filtered_untouched_fades_further():
+    # The Untouched tier is already dimmed, so filtering it drops those nodes
+    # to the spotlight background opacity instead (decluttering).
+    html = _render()
+    assert "filteredTiers.has('dimmed') ? 0.12 : 0.35" in html
+
+
+def test_system_view_filters_types():
+    html = _render()
+    # System-view pills dim their node type in place...
+    assert "filteredTypes.has(n.type) ? PALETTE.dimmed : typeColor(n.type)" in html
+    # ...and edges touching a filtered type drop to the dim colour.
+    assert "!filteredTypes.has(byId[e.from].type) && !filteredTypes.has(byId[e.to].type)" in html
+
+
+def test_filter_toggle_preserves_selection_spotlight():
+    html = _render()
+    assert "if (selected) spotlight(neighbours(selected))" in html
+
+
 def test_unknown_node_type_falls_back_to_neutral_badge():
     # STRONGLY RECOMMENDED 7: TS[n.type] may be undefined for a node type not
     # present in the payload's typeStyle map -- showNode must not throw.
