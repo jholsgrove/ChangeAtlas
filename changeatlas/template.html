@@ -9,8 +9,9 @@
 *{box-sizing:border-box}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
 font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
-#app{display:flex;height:100%;position:relative}
-#graph{flex:1;height:100%;background:var(--bg)}
+#app{display:flex;height:100%}
+#main{flex:1;height:100%;position:relative;min-width:0}
+#graph{width:100%;height:100%;background:var(--bg)}
 .side{width:340px;flex:0 0 340px;border-left:1px solid var(--line);
 background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
 .side .pad{padding:16px 18px;overflow:auto;flex:1}
@@ -68,7 +69,7 @@ button.reset:hover{border-color:var(--accent)}
 border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 .views button:hover{border-color:var(--accent)}
 .views button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
-#list-view{position:absolute;inset:0 340px 0 0;background:var(--bg);overflow:auto;
+#list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
 #list-view table{width:100%;border-collapse:collapse;font-size:13px}
@@ -84,6 +85,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 </head>
 <body>
 <div id="app">
+  <main id="main" aria-label="Impact map">
   <div id="graph" tabindex="-1"></div>
   <section id="list-view" hidden aria-label="Impacted components as a table">
     <table>
@@ -94,6 +96,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       <tbody id="list-view-body"></tbody>
     </table>
   </section>
+  </main>
   <aside class="side">
     <h1>
       <div class="brand">

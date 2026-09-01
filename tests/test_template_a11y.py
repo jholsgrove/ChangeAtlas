@@ -15,6 +15,19 @@ def _render():
 def test_lang_attribute():
     assert 'lang="en"' in _render()
 
+def test_main_landmark_contains_page_content():
+    # Axe: "document should have one main landmark" and "all page content
+    # should be contained by landmarks". The graph and its list-view
+    # equivalent are the primary content (<main>); the sidebar is <aside>.
+    html = _render()
+    assert "<main" in html
+    main_open = html.index("<main")
+    main_close = html.index("</main>")
+    assert main_open < html.index('id="graph"') < main_close
+    assert main_open < html.index('id="list-view"') < main_close
+    assert not (main_open < html.index("<aside") < main_close)
+
+
 def test_view_control_scaffolding_present():
     html = _render()
     for frag in ('id="view-impact"', 'id="view-system"', 'id="view-list"',
