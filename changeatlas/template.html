@@ -117,6 +117,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     <div class="pad">
       <div class="detail" id="detail"><p class="empty">Select a node to see what it does and what it connects to.</p></div>
       <button class="reset" id="reset" style="margin-top:14px">Reset view</button>
+      <button class="reset" id="export-obsidian" style="margin-top:8px">Export to Obsidian</button>
     </div>
     <footer><a href="https://github.com/jholsgrove/ChangeAtlas" target="_blank"
       rel="noopener">ChangeAtlas on GitHub</a></footer>
@@ -501,6 +502,190 @@ function refreshVisuals() {
 viewButtons.impact.addEventListener('click', () => setView('impact'));
 viewButtons.system.addEventListener('click', () => setView('system'));
 viewButtons.list.addEventListener('click', () => setView('list'));
+
+// ---- export to Obsidian: the map as a vault (folder of markdown notes),
+// downloaded as a store-only zip built right here — no libraries, so the
+// report stays self-contained. One note per component with wikilinks for
+// edges and a tier tag; a release index note; an .obsidian graph preset
+// whose colour groups mirror the impact tiers. ----
+function sanitizeName(s) {
+  // Windows-illegal chars plus the ones Obsidian can't link through (#^[]|).
+  return String(s).replace(/[\\/:*?"<>|#^\[\]]/g, '-').replace(/\s+/g, ' ').trim()
+    || 'Untitled';
+}
+function buildNoteNames() {
+  const names = {}, used = new Set();
+  DATA.nodes.forEach(n => {
+    const base = sanitizeName(n.title);
+    let name = base, i = 2;
+    while (used.has(name.toLowerCase())) name = base + ' ' + (i++);
+    used.add(name.toLowerCase());
+    names[n.id] = name;
+  });
+  return names;
+}
+function wikiLink(name) { return '[[' + name + ']]'; }
+function mdLinkText(s) { return String(s).replace(/[\[\]]/g, ')'); }
+function noteFor(n, names, system) {
+  // System vault: architecture only — type tag, no release overlay,
+  // matching what the in-app System view shows.
+  const tier = stateOf(n.id);
+  const L = ['---',
+             'type: ' + ((TS[n.type] && TS[n.type].label) || n.type)];
+  if (n.repo) L.push('repo: "' + String(n.repo).replace(/"/g, '\\"') + '"');
+  if (system) {
+    L.push('tags:', '  - ' + sanitizeName(n.type));
+  } else {
+    L.push('tier: ' + (tier === 'dimmed' ? 'untouched' : tier));
+    if (tier !== 'dimmed') L.push('tags:', '  - ' + tier);
+  }
+  L.push('---', '');
+  if (n.summary) L.push('> ' + n.summary, '');
+  const rel = (e, otherId) => '- ' + (EL[e.kind] || e.kind) + ' ' +
+    wikiLink(names[otherId] || otherId) + (e.note ? ' — ' + e.note : '');
+  const { out, inc } = edgesFor(n.id);
+  if (out.length) { L.push('## Depends on / contains', ''); out.forEach(e => L.push(rel(e, e.to))); L.push(''); }
+  if (inc.length) { L.push('## Used by', ''); inc.forEach(e => L.push(rel(e, e.from))); L.push(''); }
+  const det = system ? null : DATA.details[n.id];
+  if (det && det.stories && det.stories.length) {
+    L.push('## Stories in this release', '');
+    det.stories.forEach(s =>
+      L.push('- ' + s.type + ' [#' + s.id + ' ' + mdLinkText(s.title) + '](' + safeUrl(s.url) + ')'));
+    L.push('');
+  }
+  if (det && det.prs && det.prs.length) {
+    L.push('## Pull requests', '');
+    det.prs.forEach(p =>
+      L.push('- ' + p.repo + ' [!' + p.id + ' ' + mdLinkText(p.title) + '](' + safeUrl(p.url) + ')'));
+    L.push('');
+  }
+  return L.join('\n');
+}
+function indexNote(names) {
+  const L = ['# Release ' + DATA.release, '',
+             'Generated ' + DATA.generated + ' — exported from ChangeAtlas.', ''];
+  [['changed', 'Changed'], ['touched', 'Touched'],
+   ['testOnly', 'Test-only'], ['peripheral', 'Peripheral']].forEach(([k, label]) => {
+    const ids = DATA.impact[k] || [];
+    if (!ids.length) return;
+    L.push('## ' + label, '');
+    ids.forEach(id => L.push('- ' + wikiLink(names[id] || id)));
+    L.push('');
+  });
+  return L.join('\n');
+}
+function systemIndexNote(names) {
+  const L = ['# System map — Release ' + DATA.release, '',
+             DATA.nodes.length + ' components · ' + DATA.edges.length +
+             ' dependencies — exported from ChangeAtlas.', ''];
+  const byType = {};
+  DATA.nodes.forEach(n => (byType[n.type] = byType[n.type] || []).push(n));
+  Object.keys(byType).forEach(t => {
+    L.push('## ' + ((TS[t] && TS[t].label) || t), '');
+    byType[t].forEach(n => L.push('- ' + wikiLink(names[n.id])));
+    L.push('');
+  });
+  return L.join('\n');
+}
+function graphPreset(system) {
+  if (system) {
+    const types = new Set(DATA.nodes.map(n => n.type));
+    return { colorGroups: [...types].map(t => ({
+      query: 'tag:#' + sanitizeName(t),
+      color: { a: 1, rgb: parseInt(typeColor(t).slice(1), 16) },
+    })) };
+  }
+  return { colorGroups: ['changed', 'touched', 'testOnly', 'peripheral'].map(k => ({
+    query: 'tag:#' + k,
+    color: { a: 1, rgb: parseInt(PALETTE.tiers[k].fill.slice(1), 16) },
+  })) };
+}
+function buildVaultFiles() {
+  const system = currentView === 'system';
+  const names = buildNoteNames();
+  const files = [
+    system
+      ? { path: 'System map (Release ' + sanitizeName(DATA.release) + ').md', content: systemIndexNote(names) }
+      : { path: 'Release ' + sanitizeName(DATA.release) + '.md', content: indexNote(names) },
+    { path: '.obsidian/graph.json', content: JSON.stringify(graphPreset(system), null, 2) },
+  ];
+  DATA.nodes.forEach(n =>
+    files.push({ path: 'Components/' + names[n.id] + '.md', content: noteFor(n, names, system) }));
+  return files;
+}
+function crc32(bytes) {
+  let table = crc32.table;
+  if (!table) {
+    table = crc32.table = new Int32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      table[i] = c;
+    }
+  }
+  let crc = -1;
+  for (let i = 0; i < bytes.length; i++) crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xFF];
+  return (crc ^ -1) >>> 0;
+}
+function makeZip(files) {  // store-only (method 0): headers + CRC32, no compression
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  files.forEach(f => {
+    const name = enc.encode(f.path), data = enc.encode(f.content);
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true);   // local file header
+    local.setUint16(4, 20, true);           // version needed
+    local.setUint16(6, 0x0800, true);       // flags: UTF-8 names
+    local.setUint16(8, 0, true);            // method: store
+    local.setUint16(10, dosTime, true);
+    local.setUint16(12, dosDate, true);
+    local.setUint32(14, crc, true);
+    local.setUint32(18, data.length, true); // compressed size == size (store)
+    local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true);
+    local.setUint16(28, 0, true);           // extra length
+    parts.push(local.buffer, name, data);
+    const cen = new DataView(new ArrayBuffer(46));
+    cen.setUint32(0, 0x02014b50, true);     // central directory entry
+    cen.setUint16(4, 20, true);
+    cen.setUint16(6, 20, true);
+    cen.setUint16(8, 0x0800, true);
+    cen.setUint16(10, 0, true);
+    cen.setUint16(12, dosTime, true);
+    cen.setUint16(14, dosDate, true);
+    cen.setUint32(16, crc, true);
+    cen.setUint32(20, data.length, true);
+    cen.setUint32(24, data.length, true);
+    cen.setUint16(28, name.length, true);   // remaining u16/u32 fields stay 0
+    cen.setUint32(42, offset, true);        // local header offset
+    central.push(cen.buffer, name);
+    offset += 30 + name.length + data.length;
+  });
+  const cdirSize = central.reduce((s, b) => s + (b.byteLength !== undefined ? b.byteLength : b.length), 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);       // end of central directory
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, cdirSize, true);
+  end.setUint32(16, offset, true);
+  return new Blob(parts.concat(central, [end.buffer]), { type: 'application/zip' });
+}
+document.getElementById('export-obsidian').addEventListener('click', () => {
+  const blob = makeZip(buildVaultFiles());
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'impact-' + String(DATA.release).replace(/[^\w.-]/g, '_') +
+    (currentView === 'system' ? '-system' : '') + '-vault.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
 
 // ---- theme: dark | light (default follows prefers-color-scheme) ----
 function applyTheme(t) {
