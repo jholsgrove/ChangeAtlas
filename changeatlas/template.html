@@ -526,13 +526,19 @@ function buildNoteNames() {
 }
 function wikiLink(name) { return '[[' + name + ']]'; }
 function mdLinkText(s) { return String(s).replace(/[\[\]]/g, ')'); }
-function noteFor(n, names) {
+function noteFor(n, names, system) {
+  // System vault: architecture only — type tag, no release overlay,
+  // matching what the in-app System view shows.
   const tier = stateOf(n.id);
   const L = ['---',
              'type: ' + ((TS[n.type] && TS[n.type].label) || n.type)];
   if (n.repo) L.push('repo: "' + String(n.repo).replace(/"/g, '\\"') + '"');
-  L.push('tier: ' + (tier === 'dimmed' ? 'untouched' : tier));
-  if (tier !== 'dimmed') L.push('tags:', '  - ' + tier);
+  if (system) {
+    L.push('tags:', '  - ' + sanitizeName(n.type));
+  } else {
+    L.push('tier: ' + (tier === 'dimmed' ? 'untouched' : tier));
+    if (tier !== 'dimmed') L.push('tags:', '  - ' + tier);
+  }
   L.push('---', '');
   if (n.summary) L.push('> ' + n.summary, '');
   const rel = (e, otherId) => '- ' + (EL[e.kind] || e.kind) + ' ' +
@@ -540,7 +546,7 @@ function noteFor(n, names) {
   const { out, inc } = edgesFor(n.id);
   if (out.length) { L.push('## Depends on / contains', ''); out.forEach(e => L.push(rel(e, e.to))); L.push(''); }
   if (inc.length) { L.push('## Used by', ''); inc.forEach(e => L.push(rel(e, e.from))); L.push(''); }
-  const det = DATA.details[n.id];
+  const det = system ? null : DATA.details[n.id];
   if (det && det.stories && det.stories.length) {
     L.push('## Stories in this release', '');
     det.stories.forEach(s =>
@@ -568,20 +574,43 @@ function indexNote(names) {
   });
   return L.join('\n');
 }
-function graphPreset() {
+function systemIndexNote(names) {
+  const L = ['# System map — Release ' + DATA.release, '',
+             DATA.nodes.length + ' components · ' + DATA.edges.length +
+             ' dependencies — exported from ChangeAtlas.', ''];
+  const byType = {};
+  DATA.nodes.forEach(n => (byType[n.type] = byType[n.type] || []).push(n));
+  Object.keys(byType).forEach(t => {
+    L.push('## ' + ((TS[t] && TS[t].label) || t), '');
+    byType[t].forEach(n => L.push('- ' + wikiLink(names[n.id])));
+    L.push('');
+  });
+  return L.join('\n');
+}
+function graphPreset(system) {
+  if (system) {
+    const types = new Set(DATA.nodes.map(n => n.type));
+    return { colorGroups: [...types].map(t => ({
+      query: 'tag:#' + sanitizeName(t),
+      color: { a: 1, rgb: parseInt(typeColor(t).slice(1), 16) },
+    })) };
+  }
   return { colorGroups: ['changed', 'touched', 'testOnly', 'peripheral'].map(k => ({
     query: 'tag:#' + k,
     color: { a: 1, rgb: parseInt(PALETTE.tiers[k].fill.slice(1), 16) },
   })) };
 }
 function buildVaultFiles() {
+  const system = currentView === 'system';
   const names = buildNoteNames();
   const files = [
-    { path: 'Release ' + sanitizeName(DATA.release) + '.md', content: indexNote(names) },
-    { path: '.obsidian/graph.json', content: JSON.stringify(graphPreset(), null, 2) },
+    system
+      ? { path: 'System map (Release ' + sanitizeName(DATA.release) + ').md', content: systemIndexNote(names) }
+      : { path: 'Release ' + sanitizeName(DATA.release) + '.md', content: indexNote(names) },
+    { path: '.obsidian/graph.json', content: JSON.stringify(graphPreset(system), null, 2) },
   ];
   DATA.nodes.forEach(n =>
-    files.push({ path: 'Components/' + names[n.id] + '.md', content: noteFor(n, names) }));
+    files.push({ path: 'Components/' + names[n.id] + '.md', content: noteFor(n, names, system) }));
   return files;
 }
 function crc32(bytes) {
@@ -650,7 +679,8 @@ document.getElementById('export-obsidian').addEventListener('click', () => {
   const blob = makeZip(buildVaultFiles());
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'impact-' + String(DATA.release).replace(/[^\w.-]/g, '_') + '-vault.zip';
+  a.download = 'impact-' + String(DATA.release).replace(/[^\w.-]/g, '_') +
+    (currentView === 'system' ? '-system' : '') + '-vault.zip';
   document.body.appendChild(a);
   a.click();
   a.remove();

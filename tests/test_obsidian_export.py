@@ -63,6 +63,29 @@ def test_vault_graph_preset_uses_tier_palette():
     assert "colorGroups" in html
 
 
+def test_export_is_view_aware():
+    # Exporting from System view produces a system vault: notes tagged by
+    # component type (no release overlay), a type-grouped index note, and a
+    # distinct zip name so the two exports don't overwrite each other.
+    html = _render()
+    assert "function systemIndexNote" in html
+    assert "'System map" in html
+    assert "'-system'" in html
+    # System notes carry a type tag instead of a tier tag...
+    assert "'  - ' + sanitizeName(n.type)" in html
+    # ...and release details (stories/PRs) are omitted, same as the in-app
+    # System view panel.
+    assert "system ? null : DATA.details[n.id]" in html
+
+
+def test_system_graph_preset_uses_type_palette():
+    html = _render()
+    # System-vault colour groups are built per component type from the
+    # theme's per-type colours (impact vaults keep the tier groups).
+    assert "function graphPreset(system)" in html
+    assert "'tag:#' + sanitizeName(t)" in html
+
+
 def test_story_and_pr_urls_go_through_safeurl():
     html = _render()
     # Same discipline as showNode/buildListView: exported links must be
