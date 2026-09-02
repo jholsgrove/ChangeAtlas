@@ -272,3 +272,38 @@ def test_layout_overlay_is_a_status_region():
     assert 'id="layout-overlay"' in html
     assert 'role="status"' in html
     assert "<progress" in html
+
+
+def test_group_toggle_scaffolding_present():
+    html = _render()
+    assert 'id="group-toggle"' in html
+    assert 'id="collapse-untouched"' in html and 'id="expand-all"' in html
+    assert 'id="group-tools"' in html
+    # pressed state is reflected for assistive tech
+    assert "groupToggle.setAttribute('aria-pressed', String(grouped))" in html
+
+
+def test_grouping_uses_native_clustering_keyed_by_repo():
+    html = _render()
+    assert "network.cluster({" in html
+    assert "joinCondition: o => o.repoKey === key" in html
+    assert "network.openCluster('cl:' + key)" in html
+    # externals and cross-repo messaging never collapse
+    assert "n.repo !== 'external' && n.repo !== 'cross'" in html
+
+
+def test_grouping_default_from_threshold_and_remembered_per_atlas():
+    html = _render()
+    assert "const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length" in html
+    assert "if (grouped === null) grouped = LARGE" in html
+
+
+def test_peripheral_bubbles_not_colour_alone():
+    html = _render()
+    assert "borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false" in html
+    assert "' peripheral · '" in html
+
+
+def test_search_and_links_open_collapsed_repo_first():
+    html = _render()
+    assert "if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }" in html

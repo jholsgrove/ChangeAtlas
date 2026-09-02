@@ -73,6 +73,12 @@ display:inline-block;min-width:74px}
 .reading .back{color:var(--muted);cursor:pointer;font-size:12px;display:inline-block;margin-bottom:8px}
 .empty{color:var(--muted)}
 .hint{color:var(--muted);font-size:12px;margin-top:8px}
+.toggles,.actions{display:flex;gap:6px;margin-top:8px}
+.toggles button,.actions button{flex:1;background:var(--bg);color:var(--fg);border:1px solid var(--line);
+border-radius:6px;padding:6px 8px;cursor:pointer;font:inherit;font-size:12px}
+.toggles button:hover,.actions button:hover{border-color:var(--accent)}
+.toggles button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
+#group-tools[hidden]{display:none}
 button.reset{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px;width:100%}
 button.reset:hover{border-color:var(--accent)}
@@ -139,6 +145,16 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
       <datalist id="nodelist"></datalist>
       <div class="legend" id="legend"></div>
+      <div class="toggles">
+        <button id="group-toggle" type="button" aria-pressed="false">Group by repo</button>
+        <button id="hide-untouched" type="button" aria-pressed="false">Hide untouched</button>
+      </div>
+      <div id="group-tools" hidden>
+        <div class="actions">
+          <button id="collapse-untouched" type="button">Collapse untouched repos</button>
+          <button id="expand-all" type="button">Expand all</button>
+        </div>
+      </div>
       <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs.</div>
     </div>
     <div class="pad">
@@ -262,7 +278,7 @@ function systemEdgeVisual(e) {
 }
 
 const visNodes = new vis.DataSet(DATA.nodes.map(n => Object.assign({
-  id: n.id, label: n.title,
+  id: n.id, label: n.title, repoKey: n.repo,
   value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
 }, impactNodeVisual(n))));
 const visEdges = new vis.DataSet(DATA.edges.map((e, i) => Object.assign({
@@ -455,12 +471,21 @@ function showNode(id) {
         '<li><a data-id="' + esc(o) + '">' + esc(byId[o].title) + '</a></li>').join('') + '</ul>';
     }
   }
+  if (n.type === 'repo' && grouped && currentView !== 'list' && membersOf[n.repo]) {
+    h += '<button type="button" class="reset" id="collapse-this" style="margin-top:10px">' +
+         'Collapse ' + esc(n.title) + '</button>';
+  }
   h += '</div>';
   detail.innerHTML = h;
   detail.querySelectorAll('a[data-id]').forEach(a =>
     a.onclick = () => focusNode(a.getAttribute('data-id')));
   const closeBtn = document.getElementById('detail-close');
   if (closeBtn) closeBtn.onclick = closeDetail;
+  const collapseBtn = document.getElementById('collapse-this');
+  if (collapseBtn) collapseBtn.onclick = () => {
+    collapseRepo(n.repo); resettle(60); closeDetail();
+    network.selectNodes(['cl:' + n.repo]);
+  };
   spotlight(neighbours(id));
   // Focus management (WCAG 2.4.3): move focus into the panel that just opened.
   detail.setAttribute('tabindex', '-1');
@@ -476,13 +501,134 @@ detail.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') closeDetail();
 });
 function focusNode(id) {
+  // A node inside a collapsed repo can't be selected; open its repo first.
+  const key = byId[id] && byId[id].repo;
+  if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }
   network.selectNodes([id]);
   network.focus(id, { scale: 1.1, animation: { duration: 400 } });
   showNode(id);
 }
 network.on('click', p => {
-  if (p.nodes.length) showNode(p.nodes[0]);
-  else closeDetail();
+  if (!p.nodes.length) { closeDetail(); return; }
+  const id = p.nodes[0];
+  if (network.isCluster(id)) {          // a repo bubble: open it, show the repo
+    const key = id.slice(3);
+    expandRepo(key);
+    resettle(60);
+    if (repoAnchor[key]) showNode(repoAnchor[key]);
+    return;
+  }
+  showNode(id);
+});
+
+// ---- grouped mode: collapse repos into bubbles (vis-network clustering) ----
+// membersOf: repo key -> member node ids (the repo anchor node is not a
+// member but joins its own bubble). Externals and cross-repo messaging
+// belong to no repo and never collapse.
+const membersOf = {};
+DATA.nodes.forEach(n => {
+  if (n.type !== 'repo' && n.repo && n.repo !== 'external' && n.repo !== 'cross')
+    (membersOf[n.repo] = membersOf[n.repo] || []).push(n.id);
+});
+const repoAnchor = {};
+DATA.nodes.forEach(n => { if (n.type === 'repo') repoAnchor[n.repo] = n.id; });
+const repoTitle = key => (repoAnchor[key] && byId[repoAnchor[key]].title) || key;
+function repoSummary(key) {
+  const c = { changed: 0, touched: 0, testOnly: 0, peripheral: 0, dimmed: 0 };
+  (membersOf[key] || []).forEach(id => c[stateOf(id)]++);
+  return c;
+}
+const hasEvidence = key => {
+  const c = repoSummary(key);
+  return c.changed + c.touched + c.testOnly > 0;
+};
+
+// Default: grouped above the threshold. A toggle choice is remembered per
+// browser, keyed by atlas size so small and large reports don't fight.
+const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length;
+let grouped = null;
+try {
+  const v = localStorage.getItem(GROUP_KEY);
+  if (v === 'on' || v === 'off') grouped = v === 'on';
+} catch (e) { /* storage blocked */ }
+if (grouped === null) grouped = LARGE;
+const collapsed = new Set();
+const groupToggle = document.getElementById('group-toggle');
+
+function bubbleStyle(key) {
+  const system = currentView === 'system';
+  const c = repoSummary(key), n = (membersOf[key] || []).length;
+  const periph = !system && c.peripheral > 0;
+  const fill = system ? typeColor('repo') : periph ? PALETTE.bubble_peripheral : PALETTE.bubble;
+  const border = system ? typeColor('repo')
+               : periph ? PALETTE.tiers.peripheral.border : PALETTE.bubble_border;
+  // WCAG 1.4.1: a peripheral bubble carries the tier's dash pattern and says
+  // so in its label, never colour alone.
+  const label = repoTitle(key) + '\n' + (periph
+    ? c.peripheral + ' peripheral · ' + (n - c.peripheral) + ' more'
+    : n + ' components');
+  return {
+    label,
+    color: { background: fill, border, highlight: { background: fill, border: PALETTE.node_highlight_border } },
+    borderWidth: periph ? 2 : 1,
+    shapeProperties: { borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false },
+    font: { color: PALETTE.text, size: 12 },
+    opacity: 1,
+  };
+}
+function collapseRepo(key) {
+  if (!membersOf[key] || network.isCluster('cl:' + key)) return;
+  network.cluster({
+    joinCondition: o => o.repoKey === key,
+    clusterNodeProperties: Object.assign({
+      id: 'cl:' + key, repoKey: key, shape: 'dot',
+      value: 20 + Math.min(membersOf[key].length, 40),
+    }, bubbleStyle(key)),
+    clusterEdgeProperties: { color: { color: PALETTE.edge_dim, opacity: 0.45 },
+                             arrows: { to: { enabled: false } }, width: 1 },
+  });
+  collapsed.add(key);
+}
+function expandRepo(key) {
+  if (network.isCluster('cl:' + key)) network.openCluster('cl:' + key);
+  collapsed.delete(key);
+}
+// Bring the canvas in line with the rule: grouped + Impact view collapses
+// repos with no production/test evidence; grouped + System view collapses
+// every repo; ungrouped opens everything.
+function applyGrouping() {
+  const want = new Set();
+  if (grouped && currentView !== 'list') {
+    Object.keys(membersOf).forEach(k => {
+      if (currentView === 'system' || !hasEvidence(k)) want.add(k);
+    });
+  }
+  [...collapsed].filter(k => !want.has(k)).forEach(expandRepo);
+  want.forEach(collapseRepo);
+  document.getElementById('group-tools').hidden = !grouped || currentView === 'list';
+  groupToggle.setAttribute('aria-pressed', String(grouped));
+}
+function restyleBubbles() {   // theme or filter change: recolour without re-clustering
+  collapsed.forEach(key => {
+    if (network.isCluster('cl:' + key)) network.updateClusteredNode('cl:' + key, bubbleStyle(key));
+  });
+}
+function focusRepo(key) {
+  if (collapsed.has(key)) { expandRepo(key); resettle(60); }
+  const anchor = repoAnchor[key];
+  if (anchor) focusNode(anchor);
+}
+groupToggle.addEventListener('click', () => {
+  grouped = !grouped;
+  try { localStorage.setItem(GROUP_KEY, grouped ? 'on' : 'off'); } catch (e) { /* storage blocked */ }
+  applyGrouping();
+  resettle(150);
+});
+document.getElementById('collapse-untouched').addEventListener('click', () => {
+  applyGrouping(); resettle(100);
+});
+document.getElementById('expand-all').addEventListener('click', () => {
+  [...collapsed].forEach(expandRepo); resettle(200);
 });
 
 // ---- search ----
@@ -502,8 +648,10 @@ document.getElementById('reset').onclick = () => {
   visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: false })));
   refreshVisuals();
   buildLegend();
+  applyGrouping();
   network.unselectAll();
   network.fit({ animation: { duration: 500 } });
+  resettle(100);
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
 };
 
@@ -553,6 +701,7 @@ function setView(v) {
   }
   buildStats();
   buildLegend();
+  if (v !== 'list') { applyGrouping(); resettle(120); }
 }
 function refreshVisuals() {
   const system = currentView === 'system';
@@ -560,6 +709,7 @@ function refreshVisuals() {
   visNodes.update(DATA.nodes.map(n => Object.assign({ id: n.id }, nodeVisual(n))));
   visEdges.update(DATA.edges.map((e, i) => Object.assign(
     { id: 'e' + i }, system ? systemEdgeVisual(e) : impactEdgeVisual(e))));
+  restyleBubbles();
 }
 viewButtons.impact.addEventListener('click', () => setView('impact'));
 viewButtons.system.addEventListener('click', () => setView('system'));
@@ -830,6 +980,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   applyTheme(next);
 });
 applyTheme(theme); // initial paint: CSS vars, logo, toggle state
+applyGrouping();   // initial: collapse per rule before the first layout settles
 </script>
 </body>
 </html>
