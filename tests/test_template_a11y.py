@@ -343,3 +343,21 @@ def test_roll_up_row_click_focuses_repo():
     assert "tr.onclick = () => focusRepo(r.key)" in html
     # List view rows are plain (non-canvas equivalent), panel rows are clickable
     assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
+
+
+def test_bubbles_follow_legend_filters():
+    # Regression: legend pills only updated the node DataSet, so in grouped
+    # mode the bubbles (the untouched mass, and the amber peripheral ones)
+    # ignored Untouched/Peripheral filters and System-view type filters.
+    html = _render()
+    assert "c.peripheral > 0 && !filteredTiers.has('peripheral')" in html
+    assert "!periph && filteredTiers.has('dimmed')" in html
+    assert "filteredTypes.has('repo')" in html
+
+
+def test_spotlight_includes_bubbles():
+    html = _render()
+    i = html.index("function spotlight(keep)")
+    j = html.index("function clearSpotlight()")
+    assert "updateClusteredNode(id, { opacity: keep.has(id) ? 1 : 0.12 })" in html[i:j]
+    assert "updateClusteredNode(id, { opacity: bubbleOpacity(key) })" in html[j:j + 600]

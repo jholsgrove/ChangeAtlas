@@ -151,3 +151,13 @@ def test_grouping_toggle_off_shows_every_node(large_report):
     assert not large_report.grouping_on()
     assert large_report.bubble_count() == 0
     assert large_report.visible_node_count() == total
+
+
+def test_untouched_pill_fades_bubbles_in_grouped_mode(large_report):
+    assert set(large_report.bubble_opacities()) == {1}
+    large_report.toggle_legend_chip("Untouched")
+    ops = large_report.bubble_opacities()
+    # plain bubbles fade like filtered untouched nodes; peripheral bubbles stay lit
+    assert ops.count(0.12) > ops.count(1) > 0
+    large_report.toggle_legend_chip("Untouched")
+    assert set(large_report.bubble_opacities()) == {1}

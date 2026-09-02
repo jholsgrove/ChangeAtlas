@@ -421,9 +421,17 @@ function neighbours(id) {
 function spotlight(keep) {
   visNodes.update(DATA.nodes.map(n =>
     ({ id: n.id, opacity: keep.has(n.id) ? 1 : 0.12 })));
+  collapsed.forEach(key => {           // bubbles recede too, unless connected
+    const id = 'cl:' + key;
+    if (network.isCluster(id)) network.updateClusteredNode(id, { opacity: keep.has(id) ? 1 : 0.12 });
+  });
 }
 function clearSpotlight() {
   visNodes.update(DATA.nodes.map(n => ({ id: n.id, opacity: baseOpacity(n.id) })));
+  collapsed.forEach(key => {
+    const id = 'cl:' + key;
+    if (network.isCluster(id)) network.updateClusteredNode(id, { opacity: bubbleOpacity(key) });
+  });
 }
 network.on('hoverNode', p => spotlight(neighbours(p.node)));
 network.on('blurNode', () => { if (!selected) clearSpotlight(); });
@@ -584,16 +592,23 @@ if (grouped === null) grouped = LARGE;
 const collapsed = new Set();
 const groupToggle = document.getElementById('group-toggle');
 
+// A bubble follows the same legend filters as the nodes it stands for: in
+// Impact view a filtered Peripheral tier turns an amber bubble plain, and a
+// filtered Untouched tier fades a plain bubble the way untouched nodes fade;
+// in System view a filtered Repo type dims it like any other filtered type.
 function bubbleStyle(key) {
   const system = currentView === 'system';
   const c = repoSummary(key), n = (membersOf[key] || []).length;
-  const periph = !system && c.peripheral > 0;
-  const fill = system ? typeColor('repo') : periph ? PALETTE.bubble_peripheral : PALETTE.bubble;
-  const border = system ? typeColor('repo')
+  const periph = !system && c.peripheral > 0 && !filteredTiers.has('peripheral');
+  const faded = system ? filteredTypes.has('repo')
+                       : !periph && filteredTiers.has('dimmed');
+  const fill = system ? (faded ? PALETTE.dimmed : typeColor('repo'))
+             : periph ? PALETTE.bubble_peripheral : PALETTE.bubble;
+  const border = system ? fill
                : periph ? PALETTE.tiers.peripheral.border : PALETTE.bubble_border;
   // WCAG 1.4.1: a peripheral bubble carries the tier's dash pattern and says
   // so in its label, never colour alone.
-  const label = repoTitle(key) + '\n' + (periph
+  const label = repoTitle(key) + '\n' + (c.peripheral > 0 && !system
     ? c.peripheral + ' peripheral · ' + (n - c.peripheral) + ' more'
     : n + ' components');
   return {
@@ -602,9 +617,10 @@ function bubbleStyle(key) {
     borderWidth: periph ? 2 : 1,
     shapeProperties: { borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false },
     font: { color: PALETTE.text, size: 12 },
-    opacity: 1,
+    opacity: faded ? (system ? 0.35 : 0.12) : 1,
   };
 }
+function bubbleOpacity(key) { return bubbleStyle(key).opacity; }
 function collapseRepo(key) {
   if (!membersOf[key] || network.isCluster('cl:' + key)) return;
   network.cluster({
