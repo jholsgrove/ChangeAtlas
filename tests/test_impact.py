@@ -1,5 +1,6 @@
 from pathlib import Path
-from changeatlas import impact, heuristics
+
+from changeatlas import heuristics, impact
 
 HEUR = heuristics.load("dotnet", Path(__file__).resolve().parent.parent)
 

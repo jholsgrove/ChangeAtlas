@@ -1,6 +1,7 @@
 import pytest
 
-from changeatlas.palette import PALETTE, LIGHT_PALETTE, THEMES, TYPE_COLORS
+from changeatlas.palette import LIGHT_PALETTE, PALETTE, THEMES, TYPE_COLORS
+
 
 def _lum(hexcolor):
     r, g, b = (int(hexcolor[i:i+2], 16) / 255 for i in (1, 3, 5))

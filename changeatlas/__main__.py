@@ -216,7 +216,7 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         "release": release,
         "generated": date.today().isoformat(),
         "nodes": graph["nodes"], "edges": graph["edges"],
-        "typeStyle": {t: {"label": l, "color": c} for t, (l, c) in TYPE_STYLE.items()},
+        "typeStyle": {t: {"label": label, "color": c} for t, (label, c) in TYPE_STYLE.items()},
         "edgeLabel": EDGE_LABEL,
         "impact": {"changed": result["changed"], "touched": result["touched"],
                    "testOnly": result["test_only"], "peripheral": result["peripheral"]},

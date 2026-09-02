@@ -24,10 +24,11 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("playwright")
-from playwright.sync_api import Error as PlaywrightError, sync_playwright  # noqa: E402
+from playwright.sync_api import Error as PlaywrightError  # noqa: E402
+from playwright.sync_api import sync_playwright
 
-from changeatlas.__main__ import main                                     # noqa: E402
-from tests.browser.report_page import ReportPage                          # noqa: E402
+from changeatlas.__main__ import main  # noqa: E402
+from tests.browser.report_page import ReportPage  # noqa: E402
 
 BASE = Path(__file__).resolve().parent.parent
 # The installed Chrome (nothing to download); skip if it isn't there.

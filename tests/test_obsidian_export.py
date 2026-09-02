@@ -5,6 +5,7 @@ browser); as with test_template_a11y.py these are string-level gates on the
 shipped source.
 """
 from pathlib import Path
+
 from changeatlas import render
 
 PKG = Path(__file__).resolve().parent.parent / "changeatlas"

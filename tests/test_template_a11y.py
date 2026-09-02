@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from changeatlas import render
 
 PKG = Path(__file__).resolve().parent.parent / "changeatlas"

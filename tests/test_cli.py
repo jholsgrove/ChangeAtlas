@@ -1,11 +1,11 @@
 import json
-from pathlib import Path
 import platform
+from pathlib import Path
 
 import pytest
 
-from changeatlas.__main__ import main, parse_query_id
 from changeatlas import __main__ as cli
+from changeatlas.__main__ import main, parse_query_id
 from changeatlas.gatherers import ado
 
 GUID = "7035aa61-d5f3-4016-b3e7-19807d14932b"

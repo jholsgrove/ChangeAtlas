@@ -1,5 +1,7 @@
 from pathlib import Path
+
 import pytest
+
 from changeatlas import heuristics
 
 BASE = Path(__file__).resolve().parent.parent

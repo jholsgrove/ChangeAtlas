@@ -60,6 +60,14 @@ python -m pytest tests -v
 No other setup — the test suite has no dependencies beyond `pytest` itself
 and the standard library.
 
+Lint with [ruff](https://docs.astral.sh/ruff/) (dev-only; CI runs it, config
+in `ruff.toml`):
+
+```sh
+pip install ruff
+ruff check .
+```
+
 One optional extra: `tests/test_browser.py` drives the rendered report in
 headless Chrome via Playwright (`pip install playwright`; it uses your
 installed Chrome, no `playwright install` needed). Without Playwright those

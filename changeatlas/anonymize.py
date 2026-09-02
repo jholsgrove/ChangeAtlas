@@ -38,7 +38,9 @@ def anonymize_payload(payload: dict) -> dict:
                 repo_count += 1
 
     id_map = {n["id"]: f"n{i + 1}" for i, n in enumerate(nodes)}
-    label_of = lambda t: type_style.get(t, {}).get("label", t.title())
+
+    def label_of(t):
+        return type_style.get(t, {}).get("label", t.title())
 
     counters: dict[str, int] = {}
     new_nodes = []
