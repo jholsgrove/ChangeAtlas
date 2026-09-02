@@ -631,6 +631,21 @@ document.getElementById('expand-all').addEventListener('click', () => {
   [...collapsed].forEach(expandRepo); resettle(200);
 });
 
+// ---- hide untouched: remove untouched nodes (and, via vis, their edges)
+// from the layout so what's left re-packs. Bubbles stay: they are the
+// summary of what's hidden. Not persisted; Reset turns it off. ----
+let hideUntouched = false;
+const hideToggle = document.getElementById('hide-untouched');
+function applyHidden() {
+  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: hideUntouched && stateOf(n.id) === 'dimmed' })));
+  hideToggle.setAttribute('aria-pressed', String(hideUntouched));
+}
+hideToggle.addEventListener('click', () => {
+  hideUntouched = !hideUntouched;
+  applyHidden();
+  resettle(120);
+});
+
 // ---- search ----
 document.getElementById('search').addEventListener('change', ev => {
   const v = ev.target.value.trim().toLowerCase();
@@ -645,7 +660,8 @@ document.getElementById('reset').onclick = () => {
   selected = null;
   filteredTiers.clear();
   filteredTypes.clear();
-  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: false })));
+  hideUntouched = false;
+  applyHidden();
   refreshVisuals();
   buildLegend();
   applyGrouping();

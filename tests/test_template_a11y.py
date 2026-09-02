@@ -307,3 +307,16 @@ def test_peripheral_bubbles_not_colour_alone():
 def test_search_and_links_open_collapsed_repo_first():
     html = _render()
     assert "if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }" in html
+
+
+def test_hide_untouched_toggle_truly_hides():
+    html = _render()
+    assert 'id="hide-untouched"' in html
+    assert "hidden: hideUntouched && stateOf(n.id) === 'dimmed'" in html
+    assert "hideToggle.setAttribute('aria-pressed', String(hideUntouched))" in html
+
+
+def test_reset_clears_hide_untouched():
+    html = _render()
+    i = html.index("document.getElementById('reset').onclick")
+    assert "hideUntouched = false" in html[i:i + 900]
