@@ -55,6 +55,12 @@ PALETTE = {
     "edge_system": "#3d464f",            # edges in system view
     "badge_text": "#0b0e11",             # text on tier/type badge fills (AA-gated)
     "node_highlight_border": "#ffffff",  # selected/highlighted node outline
+    # Grouped-mode repo bubbles (collapsed repos). Quiet by design: a bubble
+    # summarises untouched nodes, so it sits between `dimmed` and `panel_bg`.
+    # A bubble holding peripheral members takes the peripheral tier's border.
+    "bubble": "#23282d",
+    "bubble_border": "#4a5058",
+    "bubble_peripheral": "#4a4512",
 }
 
 LIGHT_PALETTE = {
@@ -82,6 +88,9 @@ LIGHT_PALETTE = {
     "edge_system": "#8f9aa5",
     "badge_text": "#ffffff",
     "node_highlight_border": "#1c2126",
+    "bubble": "#e3e7eb",
+    "bubble_border": "#9aa3ad",
+    "bubble_peripheral": "#ece5b0",
 }
 
 THEMES = {"dark": PALETTE, "light": LIGHT_PALETTE}
