@@ -84,3 +84,43 @@ class ReportPage:
         """Decode a PNG in the browser and return its (0,0) pixel as (r, g, b, a)."""
         data_url = "data:image/png;base64," + base64.b64encode(png_bytes).decode()
         return tuple(self.page.evaluate(_PIXEL_AT_ORIGIN, data_url))
+
+    # ---- grouped mode / hide untouched ----
+
+    def wait_settled(self):
+        """Wait for the large-graph layout overlay to clear (no-op on small graphs)."""
+        self.page.wait_for_function(
+            "s => document.querySelector(s).hidden", arg=S.LAYOUT_OVERLAY, timeout=60_000)
+
+    def grouping_on(self) -> bool:
+        return self.page.locator(S.GROUP_TOGGLE).get_attribute("aria-pressed") == "true"
+
+    def toggle_grouping(self):
+        self.page.click(S.GROUP_TOGGLE)
+        self.wait_settled()
+
+    def toggle_hide_untouched(self):
+        self.page.click(S.HIDE_UNTOUCHED)
+        self.wait_settled()
+
+    def total_node_count(self) -> int:
+        return self.page.evaluate("DATA.nodes.length")
+
+    def visible_node_count(self) -> int:
+        """Nodes vis is actually drawing: not inside a bubble, not hidden."""
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => !network.body.nodes[id].options.hidden).length")
+
+    def bubble_count(self) -> int:
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
+
+    def click_first_bubble(self):
+        x, y = self.page.evaluate("""() => {
+          const id = network.body.nodeIndices.find(i => network.isCluster(i));
+          const d = network.canvasToDOM(network.getPositions([id])[id]);
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          return [r.left + d.x, r.top + d.y];
+        }""")
+        self.page.mouse.click(x, y)
+        self.wait_settled()
