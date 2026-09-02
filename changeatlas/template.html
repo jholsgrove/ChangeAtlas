@@ -84,6 +84,12 @@ border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
+#layout-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+background:color-mix(in srgb,var(--bg) 75%,transparent);pointer-events:none}
+#layout-overlay[hidden]{display:none}
+#layout-overlay div{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+padding:14px 20px;font-size:13px}
+#layout-overlay progress{display:block;width:240px;margin-top:8px;accent-color:var(--accent)}
 #list-view table{width:100%;border-collapse:collapse;font-size:13px}
 #list-view caption{text-align:left;color:var(--fg);font-size:15px;padding-bottom:10px}
 #list-view th,#list-view td{border-bottom:1px solid var(--line);padding:6px 8px;
@@ -99,6 +105,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 <div id="app">
   <main id="main" aria-label="Impact map">
   <div id="graph" tabindex="-1"></div>
+  <div id="layout-overlay" hidden role="status" aria-live="polite">
+    <div><span id="layout-overlay-text">Laying out the map…</span>
+    <progress id="layout-progress" max="100" value="0"></progress></div>
+  </div>
   <section id="list-view" hidden aria-label="Impacted components as a table">
     <table>
       <caption>Impacted components</caption>
@@ -158,6 +168,12 @@ if (theme !== 'light' && theme !== 'dark') {
 let PALETTE = PALETTES[theme];
 
 const DATA = /*__DATA__*/;
+// Large-graph handling. Above the threshold the report opens grouped by repo
+// and trades vis-network's slow initial-layout pass and live physics for a
+// settle-then-freeze cycle so a 1,000+ node canvas stays responsive. Below
+// it, every option is exactly what small reports always had.
+const GROUP_THRESHOLD = Number.isFinite(DATA.groupThreshold) ? DATA.groupThreshold : 150;
+const LARGE = DATA.nodes.length > GROUP_THRESHOLD;
 const TS = DATA.typeStyle, EL = DATA.edgeLabel;
 let IMPACT;
 function buildImpact() {
@@ -259,10 +275,37 @@ const network = new vis.Network(container, { nodes: visNodes, edges: visEdges },
            borderWidth: 1, scaling: { min: 8, max: 34 } },
   edges: { width: 1, smooth: { type: 'continuous' },
            arrows: { to: { enabled: true, scaleFactor: 0.45 } } },
+  layout: { improvedLayout: !LARGE },
   physics: { barnesHut: { gravitationalConstant: -8000, springLength: 110,
-             springConstant: 0.03, damping: 0.4 }, stabilization: { iterations: 250 } },
-  interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false },
+             springConstant: 0.03, damping: 0.4 },
+             stabilization: { iterations: 250, updateInterval: 25 } },
+  interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false,
+                 hideEdgesOnDrag: LARGE, hideEdgesOnZoom: LARGE },
 });
+
+// ---- settle-then-freeze physics (large graphs only) ----
+const layoutOverlay = document.getElementById('layout-overlay');
+const layoutProgress = document.getElementById('layout-progress');
+const layoutText = document.getElementById('layout-overlay-text');
+layoutOverlay.hidden = !LARGE;
+network.on('stabilizationProgress', p => {
+  layoutProgress.value = Math.round(100 * p.iterations / p.total);
+});
+network.on('stabilizationIterationsDone', () => {
+  if (LARGE) network.setOptions({ physics: { enabled: false } });
+  layoutOverlay.hidden = true;
+});
+// After a structural change (open/collapse a repo, hide untouched, view
+// switch) let the layout settle for a bounded number of iterations, then
+// freeze again. Small graphs keep live physics and never need this.
+function resettle(iterations) {
+  if (!LARGE) return;
+  layoutOverlay.hidden = false;
+  layoutProgress.value = 0;
+  layoutText.textContent = 'Re-laying out the map…';
+  network.setOptions({ physics: { enabled: true } });
+  network.stabilize(iterations);
+}
 
 const counts = {
   changed: CHANGED.size, touched: TOUCHED.size, testOnly: TESTONLY.size,

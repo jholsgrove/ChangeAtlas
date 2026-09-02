@@ -256,3 +256,19 @@ def test_export_png_disabled_in_list_view():
     setview = html[html.index("function setView"):]
     setview = setview[:setview.index("\n}\n")]
     assert "getElementById('export-png').disabled = v === 'list'" in setview
+
+
+def test_large_graph_perf_settings_are_threshold_gated():
+    html = _render()
+    assert "const LARGE = DATA.nodes.length > GROUP_THRESHOLD" in html
+    assert "improvedLayout: !LARGE" in html
+    assert "hideEdgesOnDrag: LARGE" in html and "hideEdgesOnZoom: LARGE" in html
+    # physics is frozen after stabilisation only on large graphs
+    assert "if (LARGE) network.setOptions({ physics: { enabled: false } })" in html
+
+
+def test_layout_overlay_is_a_status_region():
+    html = _render()
+    assert 'id="layout-overlay"' in html
+    assert 'role="status"' in html
+    assert "<progress" in html
