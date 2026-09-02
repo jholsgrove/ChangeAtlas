@@ -49,7 +49,8 @@ def report_url(tmp_path_factory):
     base = tmp_path_factory.mktemp("report")
     (base / "sample").mkdir()
     for f in (BASE / "sample").iterdir():
-        (base / "sample" / f.name).write_bytes(f.read_bytes())
+        if f.is_file():
+            (base / "sample" / f.name).write_bytes(f.read_bytes())
     assert main(["--sample", "--base-dir", str(base)]) == 0
     return (base / "out" / "impact-sample.html").resolve().as_uri()
 

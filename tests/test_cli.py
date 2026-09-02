@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 import platform
 
 import pytest
@@ -283,3 +284,48 @@ def test_ado_connection_error_maps_to_actionable_message(tmp_path, capsys, monke
     err = capsys.readouterr().err
     assert "could not reach" in err
     assert "check --org / network" in err
+
+
+# --- sample names and grouping threshold ------------------------------
+
+def _stage_shop_sample(tmp_path):
+    """Copy the bundled web-shop sample (files only) into a scratch base dir."""
+    import shutil
+    src = Path(__file__).resolve().parent.parent / "sample"
+    dst = tmp_path / "sample"
+    dst.mkdir()
+    for f in src.iterdir():
+        if f.is_file():
+            shutil.copy(f, dst / f.name)
+    (tmp_path / "vis.js").write_text("var vis;", encoding="utf-8")
+    return tmp_path
+
+
+def test_bare_sample_still_renders_web_shop(tmp_path):
+    root = _stage_shop_sample(tmp_path)
+    rc = main(["--sample", "--base-dir", str(root), "--vis", str(root / "vis.js")])
+    assert rc == 0
+    assert (root / "out" / "impact-sample.html").exists()
+
+
+def test_unknown_sample_name_lists_valid_names(tmp_path, capsys):
+    rc = main(["--sample", "huge", "--base-dir", str(tmp_path)])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "huge" in err and "shop" in err and "large" in err
+
+
+def test_group_threshold_reaches_payload(tmp_path):
+    root = _stage_shop_sample(tmp_path)
+    rc = main(["--sample", "--group-threshold", "7",
+               "--base-dir", str(root), "--vis", str(root / "vis.js")])
+    assert rc == 0
+    html = (root / "out" / "impact-sample.html").read_text(encoding="utf-8")
+    assert '"groupThreshold": 7' in html
+
+
+def test_group_threshold_default_is_150(tmp_path):
+    root = _stage_shop_sample(tmp_path)
+    main(["--sample", "--base-dir", str(root), "--vis", str(root / "vis.js")])
+    html = (root / "out" / "impact-sample.html").read_text(encoding="utf-8")
+    assert '"groupThreshold": 150' in html

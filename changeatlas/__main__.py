@@ -36,6 +36,12 @@ EDGE_LABEL = {
     "owns": "owns", "uses": "uses",
 }
 
+# Bundled fictional samples: name -> (directory under --base-dir, output file).
+SAMPLES = {
+    "shop": {"dir": "sample", "out": "impact-sample.html"},
+    "large": {"dir": "sample/large", "out": "impact-sample-large.html"},
+}
+
 
 def parse_query_id(value: str) -> str:
     """Extract the query GUID from a shared-query URL or a bare GUID string."""
@@ -74,18 +80,28 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
     ap.add_argument("--anonymize", action="store_true",
                     help="demo-safe output: generic node/story/PR names, dead "
                          "ADO links; writes impact-{release}-anon.html")
-    ap.add_argument("--sample", action="store_true",
-                    help="use the bundled fictional sample dataset (no ADO needed)")
+    ap.add_argument("--sample", nargs="?", const="shop", default=None, metavar="NAME",
+                    help="render a bundled fictional sample instead of a real system "
+                         "(no ADO needed): 'shop' (default; 7-repo web shop) or "
+                         "'large' (100-repo retail platform)")
+    ap.add_argument("--group-threshold", type=int, default=150,
+                    help="node count above which the report opens grouped by repo "
+                         "(default 150); the report has a toggle either way")
     args = ap.parse_args(argv)
 
     base = Path(args.base_dir)
 
     if args.sample:
-        graph_path = base / "sample" / "graph-data.json"
-        map_path = base / "sample" / "component-globs.json"
-        cache_path = base / "sample" / "release-1.0-data.json"
+        if args.sample not in SAMPLES:
+            print(f"unknown sample {args.sample!r}; choose from: " + ", ".join(SAMPLES),
+                  file=sys.stderr)
+            return 2
+        sample_dir = base / SAMPLES[args.sample]["dir"]
+        graph_path = sample_dir / "graph-data.json"
+        map_path = sample_dir / "component-globs.json"
+        cache_path = sample_dir / "release-1.0-data.json"
         release = "1.0"
-        out_path = base / "out" / "impact-sample.html"
+        out_path = base / "out" / SAMPLES[args.sample]["out"]
     else:
         if not args.graph_data:
             print("--graph-data is required (or use --sample)", file=sys.stderr)
@@ -205,6 +221,7 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         "impact": {"changed": result["changed"], "touched": result["touched"],
                    "testOnly": result["test_only"], "peripheral": result["peripheral"]},
         "details": result["details"],
+        "groupThreshold": args.group_threshold,
     }
     if args.anonymize:
         payload = anonymize.anonymize_payload(payload)
