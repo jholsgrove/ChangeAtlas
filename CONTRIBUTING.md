@@ -60,6 +60,20 @@ python -m pytest tests -v
 No other setup — the test suite has no dependencies beyond `pytest` itself
 and the standard library.
 
+One optional extra: `tests/test_browser.py` drives the rendered report in
+headless Chrome via Playwright (`pip install playwright`; it uses your
+installed Chrome, no `playwright install` needed). Without Playwright those
+tests skip and everything else still runs.
+
+Browser tests are the exception, not the default. Template behaviour is
+normally covered by string checks against the rendered HTML (see
+`tests/test_template_a11y.py`); reach for a browser test only when the
+behaviour lives in vis-network's canvas at runtime and a static check
+genuinely can't see it. When you do add one, follow the page-object layout:
+selectors in `tests/browser/selectors.py`, user-level actions in
+`tests/browser/report_page.py`, and tests that talk only to the page
+object.
+
 The repo is a plain `changeatlas/` package plus `tests/`; there's no build
 step. Run `python -m changeatlas --sample` after making changes to
 sanity-check the whole pipeline end to end against the bundled fictional

@@ -22,5 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install pytest
+      # playwright drives the runner's preinstalled Chrome (channel="chrome")
+      # for tests/test_browser.py — no `playwright install` download needed.
+      - run: pip install pytest playwright
       - run: python -m pytest tests -v

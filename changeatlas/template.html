@@ -21,9 +21,21 @@ h1 small{color:var(--muted);font-weight:400;font-size:12px;display:block;margin-
 .brand{display:flex;align-items:flex-start;gap:10px}
 .brand > div{flex:1;min-width:0}
 #logo{width:36px;height:36px;border-radius:8px;flex:0 0 36px}
-#theme-toggle{background:var(--bg);color:var(--fg);border:1px solid var(--line);
+#theme-toggle,#side-toggle{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;flex:0 0 auto}
-#theme-toggle:hover{border-color:var(--accent)}
+#theme-toggle:hover,#side-toggle:hover{border-color:var(--accent)}
+#side-toggle{font-size:11px;padding:6px 7px}
+/* Collapsed: a 44px rail keeping only the expand/theme toggles and the view
+   switch (as one-letter abbreviations; full labels stay in the DOM). */
+.side.collapsed{width:44px;flex-basis:44px}
+.side.collapsed h1{padding:10px 4px}
+.side.collapsed .brand{flex-direction:column;align-items:center;gap:8px}
+.side.collapsed #side-toggle{order:-1}
+.side.collapsed #logo,.side.collapsed .brand > div,.side.collapsed .controls,
+.side.collapsed .pad,.side.collapsed footer{display:none}
+.side.collapsed .views{flex-direction:column;margin-top:10px}
+.side.collapsed .views button{font-size:0;padding:6px 0}
+.side.collapsed .views button::before{content:attr(data-abbr);font-size:12px}
 .side footer{border-top:1px solid var(--line);padding:10px 18px;font-size:12px;
 color:var(--muted);flex:0 0 auto}
 .side footer a{color:var(--accent);text-decoration:none}
@@ -97,18 +109,20 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     </table>
   </section>
   </main>
-  <aside class="side">
+  <aside class="side" id="side">
     <h1>
       <div class="brand">
         <img id="logo" alt="" width="36" height="36">
         <div>/*__TITLE__*/<small id="stats"></small></div>
         <button id="theme-toggle" type="button" aria-pressed="false"
                 aria-label="Light theme">☀️</button>
+        <button id="side-toggle" type="button" aria-expanded="true" aria-controls="side"
+                aria-label="Collapse panel">▶</button>
       </div>
       <div class="views" role="group" aria-label="View">
-        <button id="view-impact" aria-pressed="true">Impact</button>
-        <button id="view-system" aria-pressed="false">System</button>
-        <button id="view-list" aria-pressed="false">List</button>
+        <button id="view-impact" aria-pressed="true" data-abbr="I">Impact</button>
+        <button id="view-system" aria-pressed="false" data-abbr="S">System</button>
+        <button id="view-list" aria-pressed="false" data-abbr="L">List</button>
       </div>
     </h1>
     <div class="controls">
@@ -121,6 +135,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       <div class="detail" id="detail"><p class="empty">Select a node to see what it does and what it connects to.</p></div>
       <button class="reset" id="reset" style="margin-top:14px">Reset view</button>
       <button class="reset" id="export-obsidian" style="margin-top:8px">Export to Obsidian</button>
+      <button class="reset" id="export-png" style="margin-top:8px">Export PNG</button>
     </div>
     <footer><a href="https://github.com/jholsgrove/ChangeAtlas" target="_blank"
       rel="noopener">ChangeAtlas on GitHub</a></footer>
@@ -488,6 +503,7 @@ function setView(v) {
   const lv = document.getElementById('list-view');
   lv.hidden = v !== 'list';
   if (v === 'list' && !lv.dataset.built) { buildListView(); lv.dataset.built = '1'; }
+  document.getElementById('export-png').disabled = v === 'list'; // no canvas to export
   if (v !== 'list') {
     refreshVisuals();
     if (selected) showNode(selected); // re-render panel with/without release info
@@ -689,6 +705,54 @@ document.getElementById('export-obsidian').addEventListener('click', () => {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
+
+// ---- export PNG: exactly what's on screen (zoom, pan, filters, theme). The
+// vis canvas is transparent, so paint the theme background first or the
+// PNG is see-through wherever there's no node. ----
+function exportPng() {
+  const src = container.querySelector('canvas');
+  const out = document.createElement('canvas');
+  out.width = src.width;
+  out.height = src.height;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = PALETTE.bg;
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(src, 0, 0);
+  const a = document.createElement('a');
+  a.href = out.toDataURL('image/png');
+  a.download = 'impact-' + String(DATA.release).replace(/[^\w.-]/g, '_') +
+    (currentView === 'system' ? '-system' : '') + '.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+document.getElementById('export-png').addEventListener('click', exportPng);
+
+// ---- side panel: expanded | collapsed (remembered per browser, like theme) ----
+const SIDE_KEY = 'changeatlas-side';
+const side = document.getElementById('side');
+const sideToggle = document.getElementById('side-toggle');
+function applySide(collapsed) {
+  side.classList.toggle('collapsed', collapsed);
+  sideToggle.setAttribute('aria-expanded', String(!collapsed));
+  sideToggle.setAttribute('aria-label', collapsed ? 'Expand panel' : 'Collapse panel');
+  sideToggle.textContent = collapsed ? '◀' : '▶';
+  // Collapsed view buttons show one letter; give the full name as a tooltip.
+  Object.values(viewButtons).forEach(b => {
+    if (collapsed) b.title = b.textContent; else b.removeAttribute('title');
+  });
+  // vis-network only watches *window* resize; push the container's new width through.
+  network.setSize('100%', '100%');
+  network.redraw();
+}
+sideToggle.addEventListener('click', () => {
+  const collapsed = !side.classList.contains('collapsed');
+  try { localStorage.setItem(SIDE_KEY, collapsed ? 'collapsed' : 'expanded'); } catch (e) { /* storage blocked */ }
+  applySide(collapsed);
+});
+let sideState = null;
+try { sideState = localStorage.getItem(SIDE_KEY); } catch (e) { /* storage blocked */ }
+applySide(sideState === 'collapsed');
 
 // ---- theme: dark | light (default follows prefers-color-scheme) ----
 function applyTheme(t) {
