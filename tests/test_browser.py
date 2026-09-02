@@ -139,10 +139,14 @@ def test_clicking_a_bubble_opens_that_repo(large_report):
     assert large_report.visible_node_count() > before_nodes
 
 
-def test_hide_untouched_removes_nodes_from_layout(large_report):
-    before = large_report.visible_node_count()
+def test_hide_untouched_removes_nodes_and_plain_bubbles(large_report):
+    before_nodes, before_bubbles = large_report.visible_node_count(), large_report.visible_bubble_count()
     large_report.toggle_hide_untouched()
-    assert large_report.visible_node_count() < before
+    assert large_report.visible_node_count() < before_nodes
+    # every bubble with nothing in the release goes; peripheral bubbles stay
+    assert 0 < large_report.visible_bubble_count() < before_bubbles / 4
+    large_report.toggle_hide_untouched()
+    assert large_report.visible_bubble_count() == before_bubbles
 
 
 def test_grouping_toggle_off_shows_every_node(large_report):

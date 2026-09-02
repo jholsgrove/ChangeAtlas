@@ -115,6 +115,11 @@ class ReportPage:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
 
+    def visible_bubble_count(self) -> int:
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => network.isCluster(id)"
+            " && !network.body.nodes[id].options.hidden).length")
+
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
           const id = network.body.nodeIndices.find(i => network.isCluster(i));

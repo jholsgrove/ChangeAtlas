@@ -317,6 +317,15 @@ def test_hide_untouched_toggle_truly_hides():
     assert "hideToggle.setAttribute('aria-pressed', String(hideUntouched))" in html
 
 
+def test_hide_untouched_hides_bubbles_with_nothing_in_the_release():
+    # Regression: Hide untouched removed member nodes but left every plain
+    # bubble on the canvas, so in grouped mode it looked like a no-op.
+    html = _render()
+    assert "hidden: hideUntouched && !tiered" in html
+    i = html.index("function applyHidden()")
+    assert "restyleBubbles();" in html[i:i + 400]
+
+
 def test_reset_clears_hide_untouched():
     html = _render()
     i = html.index("document.getElementById('reset').onclick")

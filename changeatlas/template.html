@@ -611,6 +611,10 @@ function bubbleStyle(key) {
   const label = repoTitle(key) + '\n' + (c.peripheral > 0 && !system
     ? c.peripheral + ' peripheral · ' + (n - c.peripheral) + ' more'
     : n + ' components');
+  // Hide untouched: a bubble whose repo has nothing in the release at all is
+  // untouched in bulk and goes with it; a bubble holding peripheral (or, in
+  // System view, any tiered) members stays as the summary of what's left.
+  const tiered = c.changed + c.touched + c.testOnly + c.peripheral > 0;
   return {
     label,
     color: { background: fill, border, highlight: { background: fill, border: PALETTE.node_highlight_border } },
@@ -618,11 +622,12 @@ function bubbleStyle(key) {
     shapeProperties: { borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false },
     font: { color: PALETTE.text, size: 12 },
     opacity: faded ? (system ? 0.35 : 0.12) : 1,
+    hidden: hideUntouched && !tiered,
   };
 }
 function bubbleOpacity(key) { return bubbleStyle(key).opacity; }
 function collapseRepo(key) {
-  if (!membersOf[key] || network.isCluster('cl:' + key)) return;
+  if (!membersOf[key] || collapsed.has(key)) return;
   network.cluster({
     joinCondition: o => o.repoKey === key,
     clusterNodeProperties: Object.assign({
@@ -678,12 +683,13 @@ document.getElementById('expand-all').addEventListener('click', () => {
 });
 
 // ---- hide untouched: remove untouched nodes (and, via vis, their edges)
-// from the layout so what's left re-packs. Bubbles stay: they are the
-// summary of what's hidden. Not persisted; Reset turns it off. ----
+// from the layout so what's left re-packs. Bubbles whose repo has nothing in
+// the release hide too (see bubbleStyle). Not persisted; Reset turns it off. ----
 let hideUntouched = false;
 const hideToggle = document.getElementById('hide-untouched');
 function applyHidden() {
   visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: hideUntouched && stateOf(n.id) === 'dimmed' })));
+  restyleBubbles();
   hideToggle.setAttribute('aria-pressed', String(hideUntouched));
 }
 hideToggle.addEventListener('click', () => {
