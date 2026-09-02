@@ -190,7 +190,8 @@ test-only component is one bubble labelled with its name and component
 count (an amber dashed ring means it contains a peripheral neighbour, and
 the label says how many). Click a bubble to open it; click the repo node
 inside an open group to close it. **Hide untouched** removes untouched
-nodes from the layout altogether. Both are toggles in the side panel, work
+nodes from the layout altogether, including the bubbles of repos with
+nothing in the release. Both are toggles in the side panel, work
 on any report, and never change the tier counts, the List view or the
 exports — the Obsidian vault is always the full atlas, and Export PNG is
 whatever is on screen. The grouping choice is remembered per browser, per

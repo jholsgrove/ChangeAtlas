@@ -115,6 +115,11 @@ class ReportPage:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
 
+    def visible_bubble_count(self) -> int:
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => network.isCluster(id)"
+            " && !network.body.nodes[id].options.hidden).length")
+
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
           const id = network.body.nodeIndices.find(i => network.isCluster(i));
@@ -124,3 +129,11 @@ class ReportPage:
         }""")
         self.page.mouse.click(x, y)
         self.wait_settled()
+
+    def toggle_legend_chip(self, label: str):
+        self.page.locator("#legend .chip", has_text=label).first.click()
+
+    def bubble_opacities(self) -> list:
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => network.isCluster(id))"
+            ".map(id => network.body.nodes[id].options.opacity)")
