@@ -74,6 +74,12 @@ selectors in `tests/browser/selectors.py`, user-level actions in
 `tests/browser/report_page.py`, and tests that talk only to the page
 object.
 
+The 100-repo sample under `sample/large/` is generated: edit
+`sample/large/generate.py`, run `python sample/large/generate.py`, and
+commit the regenerated JSON with it. `tests/test_sample_large.py` fails if
+the checked-in files drift from the generator, and holds the designed tier
+truth the release data must reproduce.
+
 The repo is a plain `changeatlas/` package plus `tests/`; there's no build
 step. Run `python -m changeatlas --sample` after making changes to
 sanity-check the whole pipeline end to end against the bundled fictional

@@ -15,6 +15,14 @@ fictional web-shop sample, clickable in your browser: theme toggle, legend
 filters, list view, and Export to Obsidian all work. Rebuilt from `main` on
 every push.
 
+**[Large-system demo →](https://jholsgrove.github.io/ChangeAtlas/large/)** — the
+same report on a fictional 100-repo retail platform (~1,500 components).
+Above 150 components the report opens **grouped by repo**: repos with no
+production or test evidence collapse into bubbles, a per-repo roll-up sits
+in the side panel, and **Hide untouched** strips the map down to the
+release. Toggle grouping off to see why the flat map stops working at this
+scale. See **Large systems**, below.
+
 <!--
   To regenerate docs/img/sample-map.png: run `python -m changeatlas --sample`,
   then screenshot out/impact-sample.html at 1600x1000 (headless works:
@@ -30,10 +38,14 @@ No installs beyond Python 3.10+ — no pip packages, no CLI tools.
 ```sh
 git clone https://github.com/jholsgrove/ChangeAtlas && cd ChangeAtlas
 python -m changeatlas --sample
+python -m changeatlas --sample large
 ```
 
 Then open `out/impact-sample.html` in a browser. This renders the bundled
 fictional web-shop sample (`sample/`) end to end, with zero ADO access.
+`--sample large` renders the 100-repo sample (`sample/large/`) to
+`out/impact-sample-large.html`; `--group-threshold N` (default 150) sets the
+component count above which any report opens grouped by repo.
 
 ## Quickstart (Azure DevOps)
 
@@ -168,6 +180,21 @@ segment — so a marker like `"test"` also matches a segment such as
 trading a few false positives for never missing a differently-named test
 folder; tune it in a custom heuristics file if your codebase needs
 tighter matching.
+
+## Large systems
+
+Readability depends on how many *untouched* nodes are drawn, not on the
+size of the atlas. Above `--group-threshold` components (default 150) the
+report opens grouped by repo: every repo with no changed, touched or
+test-only component is one bubble labelled with its name and component
+count (an amber dashed ring means it contains a peripheral neighbour, and
+the label says how many). Click a bubble to open it; click the repo node
+inside an open group to close it. **Hide untouched** removes untouched
+nodes from the layout altogether. Both are toggles in the side panel, work
+on any report, and never change the tier counts, the List view or the
+exports — the Obsidian vault is always the full atlas, and Export PNG is
+whatever is on screen. The grouping choice is remembered per browser, per
+atlas size.
 
 ## Anonymised demos
 
