@@ -197,3 +197,62 @@ def test_unknown_node_type_falls_back_to_neutral_badge():
     # present in the payload's typeStyle map -- showNode must not throw.
     html = _render()
     assert 'TS[n.type] || { label: n.type, color: \'#8a949e\' }' in html
+
+
+# ---- collapsible side panel ----
+
+def test_side_toggle_button_present_with_aria_wiring():
+    html = _render()
+    assert '<aside class="side" id="side"' in html
+    assert 'id="side-toggle"' in html
+    toggle = html[html.index('id="side-toggle"'):]
+    toggle = toggle[:toggle.index(">")]
+    assert 'aria-expanded="true"' in toggle
+    assert 'aria-controls="side"' in toggle
+    assert 'aria-label="Collapse panel"' in toggle
+
+def test_side_collapsed_state_persisted_like_theme():
+    html = _render()
+    assert "SIDE_KEY = 'changeatlas-side'" in html
+    assert "localStorage.setItem(SIDE_KEY" in html
+    assert "localStorage.getItem(SIDE_KEY" in html
+
+def test_side_toggle_resizes_graph_canvas():
+    # vis-network only listens for *window* resize; a container-width change
+    # must be pushed through explicitly or the canvas keeps its old size.
+    html = _render()
+    assert "network.setSize('100%', '100%')" in html
+    assert "network.redraw()" in html
+
+def test_collapsed_view_buttons_keep_full_label_in_dom():
+    # Collapsed rail shows an abbreviation via CSS, but the real label stays
+    # in the DOM (screen readers) - never swapped to a bare single letter.
+    html = _render()
+    for full, abbr in (("Impact", "I"), ("System", "S"), ("List", "L")):
+        assert f'data-abbr="{abbr}"' in html
+        assert f">{full}</button>" in html
+    assert "attr(data-abbr)" in html
+
+
+# ---- export PNG ----
+
+def test_export_png_button_present():
+    html = _render()
+    assert 'id="export-png"' in html
+    assert ">Export PNG<" in html
+
+def test_export_png_paints_theme_background_before_graph():
+    # The vis canvas is transparent; a bare toDataURL gives a see-through PNG.
+    html = _render()
+    fn = html[html.index("function exportPng"):]
+    fn = fn[:fn.index("\n}\n")]
+    assert "fillStyle = PALETTE.bg" in fn
+    assert fn.index("fillRect") < fn.index("drawImage")
+    assert "toDataURL('image/png')" in fn
+    assert "a.download = 'impact-'" in fn
+
+def test_export_png_disabled_in_list_view():
+    html = _render()
+    setview = html[html.index("function setView"):]
+    setview = setview[:setview.index("\n}\n")]
+    assert "getElementById('export-png').disabled = v === 'list'" in setview
