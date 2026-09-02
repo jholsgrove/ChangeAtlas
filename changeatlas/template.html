@@ -79,6 +79,21 @@ border-radius:6px;padding:6px 8px;cursor:pointer;font:inherit;font-size:12px}
 .toggles button:hover,.actions button:hover{border-color:var(--accent)}
 .toggles button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
 #group-tools[hidden]{display:none}
+#group-tools{max-height:38vh;overflow:auto}
+table.roll{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:10px}
+table.roll caption{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+color:var(--muted);padding-bottom:4px}
+table.roll th,table.roll td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.roll th:first-child,table.roll td:first-child{text-align:left;font-weight:400}
+table.roll thead th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+table.roll tbody tr.clickable{cursor:pointer}
+table.roll tbody tr.clickable:hover td,table.roll tbody tr.clickable:hover th{background:var(--bg)}
+table.roll td.zero{color:var(--muted);opacity:.5}
+table.roll tr.periph-only th{color:var(--muted)}
+table.roll[hidden]{display:none}
+#list-repos{margin:0 0 22px;font-size:13px}
+#list-repos caption{font-size:15px;text-transform:none;letter-spacing:0;color:var(--fg);padding-bottom:10px}
+#list-repos th,#list-repos td{padding:6px 8px}
 button.reset{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px;width:100%}
 button.reset:hover{border-color:var(--accent)}
@@ -116,6 +131,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     <progress id="layout-progress" max="100" value="0"></progress></div>
   </div>
   <section id="list-view" hidden aria-label="Impacted components as a table">
+    <table id="list-repos" class="roll">
+      <caption>Repos in this release</caption>
+      <thead><tr><th scope="col">Repo</th><th scope="col">Changed</th><th scope="col">Touched</th>
+        <th scope="col">Test-only</th><th scope="col">Peripheral</th></tr></thead>
+      <tbody id="list-repos-body"></tbody>
+    </table>
     <table>
       <caption>Impacted components</caption>
       <thead><tr><th scope="col">Component</th><th scope="col">Tier</th>
@@ -154,6 +175,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
           <button id="collapse-untouched" type="button">Collapse untouched repos</button>
           <button id="expand-all" type="button">Expand all</button>
         </div>
+        <table class="roll" id="roll-table" aria-label="Impact per repo">
+          <caption>Repos in this release</caption>
+          <thead><tr><th scope="col">Repo</th><th scope="col" title="Changed">Chg</th>
+            <th scope="col" title="Touched">Tch</th><th scope="col" title="Test-only">Tst</th>
+            <th scope="col" title="Peripheral">Per</th></tr></thead>
+          <tbody id="roll-body"></tbody>
+        </table>
+        <div class="hint" id="roll-more"></div>
       </div>
       <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs.</div>
     </div>
@@ -607,6 +636,7 @@ function applyGrouping() {
   want.forEach(collapseRepo);
   document.getElementById('group-tools').hidden = !grouped || currentView === 'list';
   groupToggle.setAttribute('aria-pressed', String(grouped));
+  buildRoll();
 }
 function restyleBubbles() {   // theme or filter change: recolour without re-clustering
   collapsed.forEach(key => {
@@ -646,6 +676,44 @@ hideToggle.addEventListener('click', () => {
   resettle(120);
 });
 
+// ---- per-repo roll-up (side panel in grouped mode; List view always) ----
+function rollRows() {
+  return Object.keys(membersOf)
+    .map(key => ({ key, title: repoTitle(key), c: repoSummary(key) }))
+    .filter(r => r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0)
+    .sort((a, b) => (b.c.changed - a.c.changed) || (b.c.touched - a.c.touched) ||
+                    (b.c.testOnly - a.c.testOnly) || (b.c.peripheral - a.c.peripheral) ||
+                    a.title.localeCompare(b.title));
+}
+function fillRollBody(tbody, rows, clickable) {
+  tbody.textContent = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    if (r.c.changed + r.c.touched + r.c.testOnly === 0) tr.classList.add('periph-only');
+    if (clickable) tr.classList.add('clickable');
+    const th = document.createElement('th'); th.scope = 'row'; th.textContent = r.title;
+    tr.appendChild(th);
+    [r.c.changed, r.c.touched, r.c.testOnly, r.c.peripheral].forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v; if (!v) td.className = 'zero';
+      tr.appendChild(td);
+    });
+    if (clickable) tr.onclick = () => focusRepo(r.key);
+    tbody.appendChild(tr);
+  });
+}
+function buildRoll() {
+  const rows = rollRows();
+  fillRollBody(document.getElementById('roll-body'), rows, true);
+  const rest = Object.keys(membersOf).length - rows.length;
+  document.getElementById('roll-more').textContent =
+    rest + ' more repo' + (rest === 1 ? '' : 's') + ' with nothing in this release.';
+  // System view has no tiers to summarise.
+  const system = currentView === 'system';
+  document.getElementById('roll-table').hidden = system;
+  document.getElementById('roll-more').hidden = system;
+}
+
 // ---- search ----
 document.getElementById('search').addEventListener('change', ev => {
   const v = ev.target.value.trim().toLowerCase();
@@ -678,6 +746,7 @@ function escapeHtml(s) {
 function buildListView() {
   const tiers = [["changed","Changed"],["touched","Touched"],
                  ["testOnly","Test-only"],["peripheral","Peripheral"]];
+  fillRollBody(document.getElementById("list-repos-body"), rollRows(), false);
   const body = document.getElementById("list-view-body");
   body.textContent = ""; // safe to re-enter: clear any rows from a prior throw
   for (const [key, label] of tiers) {

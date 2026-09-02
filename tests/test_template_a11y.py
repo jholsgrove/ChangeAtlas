@@ -320,3 +320,25 @@ def test_reset_clears_hide_untouched():
     html = _render()
     i = html.index("document.getElementById('reset').onclick")
     assert "hideUntouched = false" in html[i:i + 900]
+
+
+def test_roll_up_tables_present_and_accessible():
+    html = _render()
+    assert 'id="roll-body"' in html and 'id="roll-more"' in html
+    assert 'id="list-repos"' in html and 'id="list-repos-body"' in html
+    # both roll-up tables have a caption and column scopes like the component table
+    assert html.count("<caption>") >= 3
+    assert html.count('scope="col">Repo</th>') == 2
+
+
+def test_roll_up_rows_only_for_impacted_repos_sorted_by_impact():
+    html = _render()
+    assert "r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0" in html
+    assert "(b.c.changed - a.c.changed) || (b.c.touched - a.c.touched)" in html
+
+
+def test_roll_up_row_click_focuses_repo():
+    html = _render()
+    assert "tr.onclick = () => focusRepo(r.key)" in html
+    # List view rows are plain (non-canvas equivalent), panel rows are clickable
+    assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
