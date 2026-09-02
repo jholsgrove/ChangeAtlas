@@ -1,6 +1,7 @@
 import urllib.error
 
 import pytest
+
 from changeatlas.gatherers import ado
 
 ORG = "https://dev.azure.com/exampleorg"
@@ -66,7 +67,8 @@ def test_pr_changed_files_latest_iteration_blobs_only():
 
 def test_gather_release_skips_failing_pr_and_reports():
     def fetch(url):
-        if "/_apis/wit/wiql/" in url: return {"workItems": [{"id": 1}]}
+        if "/_apis/wit/wiql/" in url:
+            return {"workItems": [{"id": 1}]}
         if "/_apis/wit/workitems?ids=1" in url:
             return {"value": [{"id": 1, "fields": {"System.Title": "S"}}]}
         if "workitems/1" in url:

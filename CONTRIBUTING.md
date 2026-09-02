@@ -60,6 +60,14 @@ python -m pytest tests -v
 No other setup — the test suite has no dependencies beyond `pytest` itself
 and the standard library.
 
+Lint with [ruff](https://docs.astral.sh/ruff/) (dev-only; CI runs it, config
+in `ruff.toml`):
+
+```sh
+pip install ruff
+ruff check .
+```
+
 One optional extra: `tests/test_browser.py` drives the rendered report in
 headless Chrome via Playwright (`pip install playwright`; it uses your
 installed Chrome, no `playwright install` needed). Without Playwright those
@@ -73,6 +81,12 @@ genuinely can't see it. When you do add one, follow the page-object layout:
 selectors in `tests/browser/selectors.py`, user-level actions in
 `tests/browser/report_page.py`, and tests that talk only to the page
 object.
+
+The 100-repo sample under `sample/large/` is generated: edit
+`sample/large/generate.py`, run `python sample/large/generate.py`, and
+commit the regenerated JSON with it. `tests/test_sample_large.py` fails if
+the checked-in files drift from the generator, and holds the designed tier
+truth the release data must reproduce.
 
 The repo is a plain `changeatlas/` package plus `tests/`; there's no build
 step. Run `python -m changeatlas --sample` after making changes to

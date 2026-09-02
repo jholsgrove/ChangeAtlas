@@ -1,0 +1,39 @@
+{
+ "changed": [
+  "checkout-api-0",
+  "checkout-api-1",
+  "checkout-api-3",
+  "checkout-api-4",
+  "checkout-web-0",
+  "checkout-web-1",
+  "checkout-web-2",
+  "identity-api-0",
+  "identity-api-1",
+  "inventory-contracts-0",
+  "notifications-worker-0",
+  "payments-gateway-0",
+  "payments-gateway-1",
+  "payments-gateway-2"
+ ],
+ "touched": [
+  "checkout-api-2",
+  "checkout-api-5",
+  "checkout-web-3",
+  "checkout-web-4",
+  "identity-api-3",
+  "identity-api-4",
+  "notifications-worker-1",
+  "payments-gateway-3"
+ ],
+ "testOnly": [
+  "checkout-api-6",
+  "payments-gateway-4"
+ ],
+ "peripheralIncludes": [
+  "fulfilment-worker-0",
+  "inventory-api-0"
+ ],
+ "untouchedDatabases": [
+  "identity-api-2"
+ ]
+}

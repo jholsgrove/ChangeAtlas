@@ -1,6 +1,7 @@
 import pytest
 
-from changeatlas.palette import PALETTE, LIGHT_PALETTE, THEMES, TYPE_COLORS
+from changeatlas.palette import LIGHT_PALETTE, PALETTE, THEMES, TYPE_COLORS
+
 
 def _lum(hexcolor):
     r, g, b = (int(hexcolor[i:i+2], 16) / 255 for i in (1, 3, 5))
@@ -81,5 +82,17 @@ def test_graph_chrome_colors_present(theme):
     # so both modes control them.
     p = THEMES[theme]
     for key in ("line", "dimmed", "edge_affected", "edge_dim", "edge_system",
-                "badge_text", "node_highlight_border"):
+                "badge_text", "node_highlight_border",
+                "bubble", "bubble_border", "bubble_peripheral"):
         assert key in p, (theme, key)
+
+
+@pytest.mark.parametrize("theme", THEME_IDS)
+def test_bubble_border_contrast(theme):
+    # Grouped-mode bubbles: labels are drawn in the theme text colour over the
+    # canvas bg (covered by test_text_contrast_aa). The peripheral bubble's
+    # border is the tier border and must stay a 3:1 graphical object; the
+    # plain bubble border is deliberately quiet but must remain visible.
+    p = THEMES[theme]
+    assert contrast(p["tiers"]["peripheral"]["border"], p["bg"]) >= 3.0
+    assert contrast(p["bubble_border"], p["bg"]) >= 1.5

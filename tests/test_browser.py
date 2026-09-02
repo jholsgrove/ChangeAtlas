@@ -6,8 +6,10 @@ runtime that static checks can't see. Currently two:
 
   * collapsing the side panel really resizes the graph canvas (vis-network
     only listens for *window* resize, so a missed setSize/redraw leaves a
-    stale canvas that no static test would catch), and
-  * Export PNG really produces an opaque, canvas-sized image.
+    stale canvas that no static test would catch),
+  * Export PNG really produces an opaque, canvas-sized image, and
+  * grouped mode on the 100-repo sample: bubbles exist, open on click, and
+    Hide untouched / the grouping toggle change what vis actually draws.
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -22,10 +24,11 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("playwright")
-from playwright.sync_api import Error as PlaywrightError, sync_playwright  # noqa: E402
+from playwright.sync_api import Error as PlaywrightError  # noqa: E402
+from playwright.sync_api import sync_playwright
 
-from changeatlas.__main__ import main                                     # noqa: E402
-from tests.browser.report_page import ReportPage                          # noqa: E402
+from changeatlas.__main__ import main  # noqa: E402
+from tests.browser.report_page import ReportPage  # noqa: E402
 
 BASE = Path(__file__).resolve().parent.parent
 # The installed Chrome (nothing to download); skip if it isn't there.
@@ -49,9 +52,28 @@ def report_url(tmp_path_factory):
     base = tmp_path_factory.mktemp("report")
     (base / "sample").mkdir()
     for f in (BASE / "sample").iterdir():
-        (base / "sample" / f.name).write_bytes(f.read_bytes())
+        if f.is_file():
+            (base / "sample" / f.name).write_bytes(f.read_bytes())
     assert main(["--sample", "--base-dir", str(base)]) == 0
     return (base / "out" / "impact-sample.html").resolve().as_uri()
+
+
+@pytest.fixture(scope="module")
+def large_report_url(tmp_path_factory):
+    import shutil
+    base = tmp_path_factory.mktemp("large")
+    shutil.copytree(BASE / "sample", base / "sample")
+    assert main(["--sample", "large", "--base-dir", str(base)]) == 0
+    return (base / "out" / "impact-sample-large.html").resolve().as_uri()
+
+
+@pytest.fixture
+def large_report(browser, large_report_url):
+    """The 100-repo report, loaded fresh and settled."""
+    r = ReportPage.open(browser, large_report_url)
+    r.wait_settled()
+    yield r
+    r.close()
 
 
 @pytest.fixture
@@ -94,3 +116,38 @@ def test_export_png_downloads_opaque_image_of_the_canvas(report):
     r, g, b, a = report.pixel_at_origin(raw)
     assert a == 255, "PNG background must be opaque, not transparent"
     assert (r, g, b) == _hex_to_rgb(report.theme_background())
+
+
+def test_small_report_opens_flat(report):
+    assert not report.grouping_on()
+    assert report.bubble_count() == 0
+
+
+def test_large_report_opens_grouped_and_readable(large_report):
+    total = large_report.total_node_count()
+    assert total > 150
+    assert large_report.grouping_on()
+    bubbles = large_report.bubble_count()
+    assert 80 <= bubbles <= 100, bubbles          # 100 repos, 6 with evidence stay open
+    assert large_report.visible_node_count() < total / 4
+
+
+def test_clicking_a_bubble_opens_that_repo(large_report):
+    before_nodes, before_bubbles = large_report.visible_node_count(), large_report.bubble_count()
+    large_report.click_first_bubble()
+    assert large_report.bubble_count() == before_bubbles - 1
+    assert large_report.visible_node_count() > before_nodes
+
+
+def test_hide_untouched_removes_nodes_from_layout(large_report):
+    before = large_report.visible_node_count()
+    large_report.toggle_hide_untouched()
+    assert large_report.visible_node_count() < before
+
+
+def test_grouping_toggle_off_shows_every_node(large_report):
+    total = large_report.total_node_count()
+    large_report.toggle_grouping()
+    assert not large_report.grouping_on()
+    assert large_report.bubble_count() == 0
+    assert large_report.visible_node_count() == total

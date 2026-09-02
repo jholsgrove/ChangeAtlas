@@ -77,3 +77,12 @@ def test_output_self_contained(tmp_path):
     html = render.render(payload(), TEMPLATE, vis)
     assert not re.search(r'src\s*=\s*["\']https?://', html)
     assert not re.search(r'<link[^>]+href\s*=\s*["\']https?://', html)
+
+
+def test_render_embeds_group_threshold(tmp_path):
+    vis = tmp_path / "vis.js"
+    vis.write_text("", encoding="utf-8")
+    p = payload()
+    p["groupThreshold"] = 42
+    html = render.render(p, TEMPLATE, vis)
+    assert '"groupThreshold": 42' in html

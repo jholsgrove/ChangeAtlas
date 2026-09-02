@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from changeatlas import render
 
 PKG = Path(__file__).resolve().parent.parent / "changeatlas"
@@ -256,3 +257,89 @@ def test_export_png_disabled_in_list_view():
     setview = html[html.index("function setView"):]
     setview = setview[:setview.index("\n}\n")]
     assert "getElementById('export-png').disabled = v === 'list'" in setview
+
+
+def test_large_graph_perf_settings_are_threshold_gated():
+    html = _render()
+    assert "const LARGE = DATA.nodes.length > GROUP_THRESHOLD" in html
+    assert "improvedLayout: !LARGE" in html
+    assert "hideEdgesOnDrag: LARGE" in html and "hideEdgesOnZoom: LARGE" in html
+    # physics is frozen after stabilisation only on large graphs
+    assert "if (LARGE) network.setOptions({ physics: { enabled: false } })" in html
+
+
+def test_layout_overlay_is_a_status_region():
+    html = _render()
+    assert 'id="layout-overlay"' in html
+    assert 'role="status"' in html
+    assert "<progress" in html
+
+
+def test_group_toggle_scaffolding_present():
+    html = _render()
+    assert 'id="group-toggle"' in html
+    assert 'id="collapse-untouched"' in html and 'id="expand-all"' in html
+    assert 'id="group-tools"' in html
+    # pressed state is reflected for assistive tech
+    assert "groupToggle.setAttribute('aria-pressed', String(grouped))" in html
+
+
+def test_grouping_uses_native_clustering_keyed_by_repo():
+    html = _render()
+    assert "network.cluster({" in html
+    assert "joinCondition: o => o.repoKey === key" in html
+    assert "network.openCluster('cl:' + key)" in html
+    # externals and cross-repo messaging never collapse
+    assert "n.repo !== 'external' && n.repo !== 'cross'" in html
+
+
+def test_grouping_default_from_threshold_and_remembered_per_atlas():
+    html = _render()
+    assert "const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length" in html
+    assert "if (grouped === null) grouped = LARGE" in html
+
+
+def test_peripheral_bubbles_not_colour_alone():
+    html = _render()
+    assert "borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false" in html
+    assert "' peripheral · '" in html
+
+
+def test_search_and_links_open_collapsed_repo_first():
+    html = _render()
+    assert "if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }" in html
+
+
+def test_hide_untouched_toggle_truly_hides():
+    html = _render()
+    assert 'id="hide-untouched"' in html
+    assert "hidden: hideUntouched && stateOf(n.id) === 'dimmed'" in html
+    assert "hideToggle.setAttribute('aria-pressed', String(hideUntouched))" in html
+
+
+def test_reset_clears_hide_untouched():
+    html = _render()
+    i = html.index("document.getElementById('reset').onclick")
+    assert "hideUntouched = false" in html[i:i + 900]
+
+
+def test_roll_up_tables_present_and_accessible():
+    html = _render()
+    assert 'id="roll-body"' in html and 'id="roll-more"' in html
+    assert 'id="list-repos"' in html and 'id="list-repos-body"' in html
+    # both roll-up tables have a caption and column scopes like the component table
+    assert html.count("<caption>") >= 3
+    assert html.count('scope="col">Repo</th>') == 2
+
+
+def test_roll_up_rows_only_for_impacted_repos_sorted_by_impact():
+    html = _render()
+    assert "r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0" in html
+    assert "(b.c.changed - a.c.changed) || (b.c.touched - a.c.touched)" in html
+
+
+def test_roll_up_row_click_focuses_repo():
+    html = _render()
+    assert "tr.onclick = () => focusRepo(r.key)" in html
+    # List view rows are plain (non-canvas equivalent), panel rows are clickable
+    assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html

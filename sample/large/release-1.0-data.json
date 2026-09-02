@@ -1,0 +1,292 @@
+{
+ "release": "1.0",
+ "query": "release-1.0",
+ "fetched_at": "2026-09-02T09:00:00Z",
+ "skipped": [],
+ "work_items": [
+  {
+   "id": 41201,
+   "type": "User Story",
+   "title": "Express checkout for returning customers",
+   "url": "https://tracker.example/workitems/41201",
+   "prs": [
+    {
+     "id": 501,
+     "title": "Express checkout endpoint and validation",
+     "repo": "Checkout.Api",
+     "url": "https://tracker.example/checkout-api/pullrequest/501",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 502,
+     "title": "Order totals recalculation",
+     "repo": "Checkout.Api",
+     "url": "https://tracker.example/checkout-api/pullrequest/502",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs",
+      "/src/events-schema/Validator.cs",
+      "/src/events-schema/Mapper.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41202,
+   "type": "User Story",
+   "title": "Checkout database: index on order lookups",
+   "url": "https://tracker.example/workitems/41202",
+   "prs": [
+    {
+     "id": 503,
+     "title": "Add order lookup index",
+     "repo": "Checkout.Api",
+     "url": "https://tracker.example/checkout-api/pullrequest/503",
+     "status": "completed",
+     "files": [
+      "/src/database/migrations/0042_order_lookup_index.sql"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41203,
+   "type": "Bug",
+   "title": "Checkout API hardening",
+   "url": "https://tracker.example/workitems/41203",
+   "prs": [
+    {
+     "id": 504,
+     "title": "Harden request handling",
+     "repo": "Checkout.Api",
+     "url": "https://tracker.example/checkout-api/pullrequest/504",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs",
+      "/src/core/Validator.cs",
+      "/src/core/Mapper.cs",
+      "/src/dashboard/Handler.cs"
+     ]
+    },
+    {
+     "id": 505,
+     "title": "Regression tests for totals",
+     "repo": "Checkout.Api",
+     "url": "https://tracker.example/checkout-api/pullrequest/505",
+     "status": "completed",
+     "files": [
+      "/tests/internal-api/HandlerTests.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41204,
+   "type": "User Story",
+   "title": "Express checkout UI",
+   "url": "https://tracker.example/workitems/41204",
+   "prs": [
+    {
+     "id": 506,
+     "title": "Express checkout screens",
+     "repo": "Checkout.Web",
+     "url": "https://tracker.example/checkout-web/pullrequest/506",
+     "status": "completed",
+     "files": [
+      "/src/dashboard/Handler.cs",
+      "/src/dashboard/Validator.cs",
+      "/src/dashboard/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 507,
+     "title": "Order summary polish",
+     "repo": "Checkout.Web",
+     "url": "https://tracker.example/checkout-web/pullrequest/507",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs",
+      "/src/core/Validator.cs",
+      "/src/core/Mapper.cs",
+      "/src/public-api/Handler.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41205,
+   "type": "Bug",
+   "title": "Checkout accessibility fixes",
+   "url": "https://tracker.example/workitems/41205",
+   "prs": [
+    {
+     "id": 508,
+     "title": "Focus order on payment step",
+     "repo": "Checkout.Web",
+     "url": "https://tracker.example/checkout-web/pullrequest/508",
+     "status": "completed",
+     "files": [
+      "/src/bulk-edit/Handler.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41206,
+   "type": "User Story",
+   "title": "Support wallet payments",
+   "url": "https://tracker.example/workitems/41206",
+   "prs": [
+    {
+     "id": 509,
+     "title": "Wallet payment adapter",
+     "repo": "Payments.Gateway",
+     "url": "https://tracker.example/payments-gateway/pullrequest/509",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/events-schema/Handler.cs",
+      "/src/events-schema/Validator.cs",
+      "/src/events-schema/Mapper.cs"
+     ]
+    },
+    {
+     "id": 510,
+     "title": "Gateway routing for wallets",
+     "repo": "Payments.Gateway",
+     "url": "https://tracker.example/payments-gateway/pullrequest/510",
+     "status": "completed",
+     "files": [
+      "/src/connector/Handler.cs",
+      "/src/connector/Validator.cs",
+      "/src/connector/Mapper.cs",
+      "/src/domain-model/Handler.cs"
+     ]
+    },
+    {
+     "id": 511,
+     "title": "Contract tests for wallet flows",
+     "repo": "Payments.Gateway",
+     "url": "https://tracker.example/payments-gateway/pullrequest/511",
+     "status": "completed",
+     "files": [
+      "/tests/adapter/HandlerTests.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41207,
+   "type": "User Story",
+   "title": "Passkey sign-in",
+   "url": "https://tracker.example/workitems/41207",
+   "prs": [
+    {
+     "id": 512,
+     "title": "Passkey registration and login",
+     "repo": "Identity.Api",
+     "url": "https://tracker.example/identity-api/pullrequest/512",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 513,
+     "title": "Session claims for passkeys",
+     "repo": "Identity.Api",
+     "url": "https://tracker.example/identity-api/pullrequest/513",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs",
+      "/src/core/Handler.cs"
+     ]
+    },
+    {
+     "id": 514,
+     "title": "Repository query tidy-up",
+     "repo": "Identity.Api",
+     "url": "https://tracker.example/identity-api/pullrequest/514",
+     "status": "completed",
+     "files": [
+      "/src/database/UserRepository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41208,
+   "type": "User Story",
+   "title": "Checkout confirmation emails",
+   "url": "https://tracker.example/workitems/41208",
+   "prs": [
+    {
+     "id": 515,
+     "title": "Confirmation email template and sender",
+     "repo": "Notifications.Worker",
+     "url": "https://tracker.example/notifications-worker/pullrequest/515",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs",
+      "/src/core/Validator.cs",
+      "/src/core/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/packages.lock.json"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41209,
+   "type": "User Story",
+   "title": "Reserve stock at express checkout",
+   "url": "https://tracker.example/workitems/41209",
+   "prs": [
+    {
+     "id": 516,
+     "title": "Add reservation fields to stock contract",
+     "repo": "Inventory.Contracts",
+     "url": "https://tracker.example/inventory-contracts/pullrequest/516",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs",
+      "/src/events-schema/Validator.cs",
+      "/src/events-schema/Mapper.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 41210,
+   "type": "Task",
+   "title": "Release notes for 1.0",
+   "url": "https://tracker.example/workitems/41210",
+   "prs": []
+  },
+  {
+   "id": 41211,
+   "type": "Task",
+   "title": "Runbook update: wallet payments",
+   "url": "https://tracker.example/workitems/41211",
+   "prs": []
+  }
+ ]
+}

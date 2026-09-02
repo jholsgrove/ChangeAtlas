@@ -1,0 +1,11 @@
+# Dev-only lint. Users never need ruff: the runtime is stdlib-only.
+line-length = 120
+target-version = "py310"
+extend-exclude = ["vendor", "out", "docs"]
+
+[lint]
+select = ["E", "F", "W", "B", "I"]
+
+[lint.per-file-ignores]
+# Tests keep long literal fixtures readable.
+"tests/*" = ["E501"]

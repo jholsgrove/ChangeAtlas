@@ -73,6 +73,27 @@ display:inline-block;min-width:74px}
 .reading .back{color:var(--muted);cursor:pointer;font-size:12px;display:inline-block;margin-bottom:8px}
 .empty{color:var(--muted)}
 .hint{color:var(--muted);font-size:12px;margin-top:8px}
+.toggles,.actions{display:flex;gap:6px;margin-top:8px}
+.toggles button,.actions button{flex:1;background:var(--bg);color:var(--fg);border:1px solid var(--line);
+border-radius:6px;padding:6px 8px;cursor:pointer;font:inherit;font-size:12px}
+.toggles button:hover,.actions button:hover{border-color:var(--accent)}
+.toggles button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
+#group-tools[hidden]{display:none}
+#group-tools{max-height:38vh;overflow:auto}
+table.roll{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:10px}
+table.roll caption{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+color:var(--muted);padding-bottom:4px}
+table.roll th,table.roll td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+table.roll th:first-child,table.roll td:first-child{text-align:left;font-weight:400}
+table.roll thead th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+table.roll tbody tr.clickable{cursor:pointer}
+table.roll tbody tr.clickable:hover td,table.roll tbody tr.clickable:hover th{background:var(--bg)}
+table.roll td.zero{color:var(--muted);opacity:.5}
+table.roll tr.periph-only th{color:var(--muted)}
+table.roll[hidden]{display:none}
+#list-repos{margin:0 0 22px;font-size:13px}
+#list-repos caption{font-size:15px;text-transform:none;letter-spacing:0;color:var(--fg);padding-bottom:10px}
+#list-repos th,#list-repos td{padding:6px 8px}
 button.reset{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px;width:100%}
 button.reset:hover{border-color:var(--accent)}
@@ -84,6 +105,12 @@ border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
+#layout-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+background:color-mix(in srgb,var(--bg) 75%,transparent);pointer-events:none}
+#layout-overlay[hidden]{display:none}
+#layout-overlay div{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+padding:14px 20px;font-size:13px}
+#layout-overlay progress{display:block;width:240px;margin-top:8px;accent-color:var(--accent)}
 #list-view table{width:100%;border-collapse:collapse;font-size:13px}
 #list-view caption{text-align:left;color:var(--fg);font-size:15px;padding-bottom:10px}
 #list-view th,#list-view td{border-bottom:1px solid var(--line);padding:6px 8px;
@@ -99,7 +126,17 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 <div id="app">
   <main id="main" aria-label="Impact map">
   <div id="graph" tabindex="-1"></div>
+  <div id="layout-overlay" hidden role="status" aria-live="polite">
+    <div><span id="layout-overlay-text">Laying out the map…</span>
+    <progress id="layout-progress" max="100" value="0"></progress></div>
+  </div>
   <section id="list-view" hidden aria-label="Impacted components as a table">
+    <table id="list-repos" class="roll">
+      <caption>Repos in this release</caption>
+      <thead><tr><th scope="col">Repo</th><th scope="col">Changed</th><th scope="col">Touched</th>
+        <th scope="col">Test-only</th><th scope="col">Peripheral</th></tr></thead>
+      <tbody id="list-repos-body"></tbody>
+    </table>
     <table>
       <caption>Impacted components</caption>
       <thead><tr><th scope="col">Component</th><th scope="col">Tier</th>
@@ -129,6 +166,24 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
       <datalist id="nodelist"></datalist>
       <div class="legend" id="legend"></div>
+      <div class="toggles">
+        <button id="group-toggle" type="button" aria-pressed="false">Group by repo</button>
+        <button id="hide-untouched" type="button" aria-pressed="false">Hide untouched</button>
+      </div>
+      <div id="group-tools" hidden>
+        <div class="actions">
+          <button id="collapse-untouched" type="button">Collapse untouched repos</button>
+          <button id="expand-all" type="button">Expand all</button>
+        </div>
+        <table class="roll" id="roll-table" aria-label="Impact per repo">
+          <caption>Repos in this release</caption>
+          <thead><tr><th scope="col">Repo</th><th scope="col" title="Changed">Chg</th>
+            <th scope="col" title="Touched">Tch</th><th scope="col" title="Test-only">Tst</th>
+            <th scope="col" title="Peripheral">Per</th></tr></thead>
+          <tbody id="roll-body"></tbody>
+        </table>
+        <div class="hint" id="roll-more"></div>
+      </div>
       <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs.</div>
     </div>
     <div class="pad">
@@ -158,6 +213,12 @@ if (theme !== 'light' && theme !== 'dark') {
 let PALETTE = PALETTES[theme];
 
 const DATA = /*__DATA__*/;
+// Large-graph handling. Above the threshold the report opens grouped by repo
+// and trades vis-network's slow initial-layout pass and live physics for a
+// settle-then-freeze cycle so a 1,000+ node canvas stays responsive. Below
+// it, every option is exactly what small reports always had.
+const GROUP_THRESHOLD = Number.isFinite(DATA.groupThreshold) ? DATA.groupThreshold : 150;
+const LARGE = DATA.nodes.length > GROUP_THRESHOLD;
 const TS = DATA.typeStyle, EL = DATA.edgeLabel;
 let IMPACT;
 function buildImpact() {
@@ -246,7 +307,7 @@ function systemEdgeVisual(e) {
 }
 
 const visNodes = new vis.DataSet(DATA.nodes.map(n => Object.assign({
-  id: n.id, label: n.title,
+  id: n.id, label: n.title, repoKey: n.repo,
   value: n.type === 'repo' ? 30 : (n.type === 'database' || n.type === 'messaging' ? 18 : 10),
 }, impactNodeVisual(n))));
 const visEdges = new vis.DataSet(DATA.edges.map((e, i) => Object.assign({
@@ -259,10 +320,37 @@ const network = new vis.Network(container, { nodes: visNodes, edges: visEdges },
            borderWidth: 1, scaling: { min: 8, max: 34 } },
   edges: { width: 1, smooth: { type: 'continuous' },
            arrows: { to: { enabled: true, scaleFactor: 0.45 } } },
+  layout: { improvedLayout: !LARGE },
   physics: { barnesHut: { gravitationalConstant: -8000, springLength: 110,
-             springConstant: 0.03, damping: 0.4 }, stabilization: { iterations: 250 } },
-  interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false },
+             springConstant: 0.03, damping: 0.4 },
+             stabilization: { iterations: 250, updateInterval: 25 } },
+  interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false,
+                 hideEdgesOnDrag: LARGE, hideEdgesOnZoom: LARGE },
 });
+
+// ---- settle-then-freeze physics (large graphs only) ----
+const layoutOverlay = document.getElementById('layout-overlay');
+const layoutProgress = document.getElementById('layout-progress');
+const layoutText = document.getElementById('layout-overlay-text');
+layoutOverlay.hidden = !LARGE;
+network.on('stabilizationProgress', p => {
+  layoutProgress.value = Math.round(100 * p.iterations / p.total);
+});
+network.on('stabilizationIterationsDone', () => {
+  if (LARGE) network.setOptions({ physics: { enabled: false } });
+  layoutOverlay.hidden = true;
+});
+// After a structural change (open/collapse a repo, hide untouched, view
+// switch) let the layout settle for a bounded number of iterations, then
+// freeze again. Small graphs keep live physics and never need this.
+function resettle(iterations) {
+  if (!LARGE) return;
+  layoutOverlay.hidden = false;
+  layoutProgress.value = 0;
+  layoutText.textContent = 'Re-laying out the map…';
+  network.setOptions({ physics: { enabled: true } });
+  network.stabilize(iterations);
+}
 
 const counts = {
   changed: CHANGED.size, touched: TOUCHED.size, testOnly: TESTONLY.size,
@@ -412,12 +500,21 @@ function showNode(id) {
         '<li><a data-id="' + esc(o) + '">' + esc(byId[o].title) + '</a></li>').join('') + '</ul>';
     }
   }
+  if (n.type === 'repo' && grouped && currentView !== 'list' && membersOf[n.repo]) {
+    h += '<button type="button" class="reset" id="collapse-this" style="margin-top:10px">' +
+         'Collapse ' + esc(n.title) + '</button>';
+  }
   h += '</div>';
   detail.innerHTML = h;
   detail.querySelectorAll('a[data-id]').forEach(a =>
     a.onclick = () => focusNode(a.getAttribute('data-id')));
   const closeBtn = document.getElementById('detail-close');
   if (closeBtn) closeBtn.onclick = closeDetail;
+  const collapseBtn = document.getElementById('collapse-this');
+  if (collapseBtn) collapseBtn.onclick = () => {
+    collapseRepo(n.repo); resettle(60); closeDetail();
+    network.selectNodes(['cl:' + n.repo]);
+  };
   spotlight(neighbours(id));
   // Focus management (WCAG 2.4.3): move focus into the panel that just opened.
   detail.setAttribute('tabindex', '-1');
@@ -433,14 +530,189 @@ detail.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') closeDetail();
 });
 function focusNode(id) {
+  // A node inside a collapsed repo can't be selected; open its repo first.
+  const key = byId[id] && byId[id].repo;
+  if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }
   network.selectNodes([id]);
   network.focus(id, { scale: 1.1, animation: { duration: 400 } });
   showNode(id);
 }
 network.on('click', p => {
-  if (p.nodes.length) showNode(p.nodes[0]);
-  else closeDetail();
+  if (!p.nodes.length) { closeDetail(); return; }
+  const id = p.nodes[0];
+  if (network.isCluster(id)) {          // a repo bubble: open it, show the repo
+    const key = id.slice(3);
+    expandRepo(key);
+    resettle(60);
+    if (repoAnchor[key]) showNode(repoAnchor[key]);
+    return;
+  }
+  showNode(id);
 });
+
+// ---- grouped mode: collapse repos into bubbles (vis-network clustering) ----
+// membersOf: repo key -> member node ids (the repo anchor node is not a
+// member but joins its own bubble). Externals and cross-repo messaging
+// belong to no repo and never collapse.
+const membersOf = {};
+DATA.nodes.forEach(n => {
+  if (n.type !== 'repo' && n.repo && n.repo !== 'external' && n.repo !== 'cross')
+    (membersOf[n.repo] = membersOf[n.repo] || []).push(n.id);
+});
+const repoAnchor = {};
+DATA.nodes.forEach(n => { if (n.type === 'repo') repoAnchor[n.repo] = n.id; });
+const repoTitle = key => (repoAnchor[key] && byId[repoAnchor[key]].title) || key;
+function repoSummary(key) {
+  const c = { changed: 0, touched: 0, testOnly: 0, peripheral: 0, dimmed: 0 };
+  (membersOf[key] || []).forEach(id => c[stateOf(id)]++);
+  return c;
+}
+const hasEvidence = key => {
+  const c = repoSummary(key);
+  return c.changed + c.touched + c.testOnly > 0;
+};
+
+// Default: grouped above the threshold. A toggle choice is remembered per
+// browser, keyed by atlas size so small and large reports don't fight.
+const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length;
+let grouped = null;
+try {
+  const v = localStorage.getItem(GROUP_KEY);
+  if (v === 'on' || v === 'off') grouped = v === 'on';
+} catch (e) { /* storage blocked */ }
+if (grouped === null) grouped = LARGE;
+const collapsed = new Set();
+const groupToggle = document.getElementById('group-toggle');
+
+function bubbleStyle(key) {
+  const system = currentView === 'system';
+  const c = repoSummary(key), n = (membersOf[key] || []).length;
+  const periph = !system && c.peripheral > 0;
+  const fill = system ? typeColor('repo') : periph ? PALETTE.bubble_peripheral : PALETTE.bubble;
+  const border = system ? typeColor('repo')
+               : periph ? PALETTE.tiers.peripheral.border : PALETTE.bubble_border;
+  // WCAG 1.4.1: a peripheral bubble carries the tier's dash pattern and says
+  // so in its label, never colour alone.
+  const label = repoTitle(key) + '\n' + (periph
+    ? c.peripheral + ' peripheral · ' + (n - c.peripheral) + ' more'
+    : n + ' components');
+  return {
+    label,
+    color: { background: fill, border, highlight: { background: fill, border: PALETTE.node_highlight_border } },
+    borderWidth: periph ? 2 : 1,
+    shapeProperties: { borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false },
+    font: { color: PALETTE.text, size: 12 },
+    opacity: 1,
+  };
+}
+function collapseRepo(key) {
+  if (!membersOf[key] || network.isCluster('cl:' + key)) return;
+  network.cluster({
+    joinCondition: o => o.repoKey === key,
+    clusterNodeProperties: Object.assign({
+      id: 'cl:' + key, repoKey: key, shape: 'dot',
+      value: 20 + Math.min(membersOf[key].length, 40),
+    }, bubbleStyle(key)),
+    clusterEdgeProperties: { color: { color: PALETTE.edge_dim, opacity: 0.45 },
+                             arrows: { to: { enabled: false } }, width: 1 },
+  });
+  collapsed.add(key);
+}
+function expandRepo(key) {
+  if (network.isCluster('cl:' + key)) network.openCluster('cl:' + key);
+  collapsed.delete(key);
+}
+// Bring the canvas in line with the rule: grouped + Impact view collapses
+// repos with no production/test evidence; grouped + System view collapses
+// every repo; ungrouped opens everything.
+function applyGrouping() {
+  const want = new Set();
+  if (grouped && currentView !== 'list') {
+    Object.keys(membersOf).forEach(k => {
+      if (currentView === 'system' || !hasEvidence(k)) want.add(k);
+    });
+  }
+  [...collapsed].filter(k => !want.has(k)).forEach(expandRepo);
+  want.forEach(collapseRepo);
+  document.getElementById('group-tools').hidden = !grouped || currentView === 'list';
+  groupToggle.setAttribute('aria-pressed', String(grouped));
+  buildRoll();
+}
+function restyleBubbles() {   // theme or filter change: recolour without re-clustering
+  collapsed.forEach(key => {
+    if (network.isCluster('cl:' + key)) network.updateClusteredNode('cl:' + key, bubbleStyle(key));
+  });
+}
+function focusRepo(key) {
+  if (collapsed.has(key)) { expandRepo(key); resettle(60); }
+  const anchor = repoAnchor[key];
+  if (anchor) focusNode(anchor);
+}
+groupToggle.addEventListener('click', () => {
+  grouped = !grouped;
+  try { localStorage.setItem(GROUP_KEY, grouped ? 'on' : 'off'); } catch (e) { /* storage blocked */ }
+  applyGrouping();
+  resettle(150);
+});
+document.getElementById('collapse-untouched').addEventListener('click', () => {
+  applyGrouping(); resettle(100);
+});
+document.getElementById('expand-all').addEventListener('click', () => {
+  [...collapsed].forEach(expandRepo); resettle(200);
+});
+
+// ---- hide untouched: remove untouched nodes (and, via vis, their edges)
+// from the layout so what's left re-packs. Bubbles stay: they are the
+// summary of what's hidden. Not persisted; Reset turns it off. ----
+let hideUntouched = false;
+const hideToggle = document.getElementById('hide-untouched');
+function applyHidden() {
+  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: hideUntouched && stateOf(n.id) === 'dimmed' })));
+  hideToggle.setAttribute('aria-pressed', String(hideUntouched));
+}
+hideToggle.addEventListener('click', () => {
+  hideUntouched = !hideUntouched;
+  applyHidden();
+  resettle(120);
+});
+
+// ---- per-repo roll-up (side panel in grouped mode; List view always) ----
+function rollRows() {
+  return Object.keys(membersOf)
+    .map(key => ({ key, title: repoTitle(key), c: repoSummary(key) }))
+    .filter(r => r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0)
+    .sort((a, b) => (b.c.changed - a.c.changed) || (b.c.touched - a.c.touched) ||
+                    (b.c.testOnly - a.c.testOnly) || (b.c.peripheral - a.c.peripheral) ||
+                    a.title.localeCompare(b.title));
+}
+function fillRollBody(tbody, rows, clickable) {
+  tbody.textContent = '';
+  rows.forEach(r => {
+    const tr = document.createElement('tr');
+    if (r.c.changed + r.c.touched + r.c.testOnly === 0) tr.classList.add('periph-only');
+    if (clickable) tr.classList.add('clickable');
+    const th = document.createElement('th'); th.scope = 'row'; th.textContent = r.title;
+    tr.appendChild(th);
+    [r.c.changed, r.c.touched, r.c.testOnly, r.c.peripheral].forEach(v => {
+      const td = document.createElement('td');
+      td.textContent = v; if (!v) td.className = 'zero';
+      tr.appendChild(td);
+    });
+    if (clickable) tr.onclick = () => focusRepo(r.key);
+    tbody.appendChild(tr);
+  });
+}
+function buildRoll() {
+  const rows = rollRows();
+  fillRollBody(document.getElementById('roll-body'), rows, true);
+  const rest = Object.keys(membersOf).length - rows.length;
+  document.getElementById('roll-more').textContent =
+    rest + ' more repo' + (rest === 1 ? '' : 's') + ' with nothing in this release.';
+  // System view has no tiers to summarise.
+  const system = currentView === 'system';
+  document.getElementById('roll-table').hidden = system;
+  document.getElementById('roll-more').hidden = system;
+}
 
 // ---- search ----
 document.getElementById('search').addEventListener('change', ev => {
@@ -456,11 +728,14 @@ document.getElementById('reset').onclick = () => {
   selected = null;
   filteredTiers.clear();
   filteredTypes.clear();
-  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: false })));
+  hideUntouched = false;
+  applyHidden();
   refreshVisuals();
   buildLegend();
+  applyGrouping();
   network.unselectAll();
   network.fit({ animation: { duration: 500 } });
+  resettle(100);
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
 };
 
@@ -471,6 +746,7 @@ function escapeHtml(s) {
 function buildListView() {
   const tiers = [["changed","Changed"],["touched","Touched"],
                  ["testOnly","Test-only"],["peripheral","Peripheral"]];
+  fillRollBody(document.getElementById("list-repos-body"), rollRows(), false);
   const body = document.getElementById("list-view-body");
   body.textContent = ""; // safe to re-enter: clear any rows from a prior throw
   for (const [key, label] of tiers) {
@@ -510,6 +786,7 @@ function setView(v) {
   }
   buildStats();
   buildLegend();
+  if (v !== 'list') { applyGrouping(); resettle(120); }
 }
 function refreshVisuals() {
   const system = currentView === 'system';
@@ -517,6 +794,7 @@ function refreshVisuals() {
   visNodes.update(DATA.nodes.map(n => Object.assign({ id: n.id }, nodeVisual(n))));
   visEdges.update(DATA.edges.map((e, i) => Object.assign(
     { id: 'e' + i }, system ? systemEdgeVisual(e) : impactEdgeVisual(e))));
+  restyleBubbles();
 }
 viewButtons.impact.addEventListener('click', () => setView('impact'));
 viewButtons.system.addEventListener('click', () => setView('system'));
@@ -787,6 +1065,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   applyTheme(next);
 });
 applyTheme(theme); // initial paint: CSS vars, logo, toggle state
+applyGrouping();   // initial: collapse per rule before the first layout settles
 </script>
 </body>
 </html>
