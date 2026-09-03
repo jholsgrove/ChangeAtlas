@@ -149,6 +149,27 @@ def test_hide_untouched_removes_nodes_and_plain_bubbles(large_report):
     assert large_report.visible_bubble_count() == before_bubbles
 
 
+def test_hide_untouched_pulls_the_survivors_together(large_report):
+    # Hidden nodes must leave the physics simulation too; otherwise they keep
+    # repelling the survivors, which stay pinned at the corners of the full map
+    # with nothing but whitespace between them.
+    large_report.toggle_hide_untouched()
+    survivors = large_report.visible_ids()
+    compact = large_report.bounds_area(survivors)
+    large_report.toggle_hide_untouched()          # untouched back in: the map spreads out again
+    spread = large_report.bounds_area(survivors)
+    assert compact < spread / 2
+
+
+def test_opening_a_bubble_while_hidden_leaves_no_ghosts_in_physics(large_report):
+    # vis turns physics back on for everything a cluster releases, which would
+    # quietly re-introduce ghosts after any bubble opens with Hide untouched on.
+    large_report.toggle_hide_untouched()
+    assert large_report.ghosts_in_physics() == 0
+    large_report.click_first_bubble()
+    assert large_report.ghosts_in_physics() == 0
+
+
 def test_grouping_toggle_off_shows_every_node(large_report):
     total = large_report.total_node_count()
     large_report.toggle_grouping()

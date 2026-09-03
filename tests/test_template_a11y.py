@@ -313,7 +313,8 @@ def test_search_and_links_open_collapsed_repo_first():
 def test_hide_untouched_toggle_truly_hides():
     html = _render()
     assert 'id="hide-untouched"' in html
-    assert "hidden: hideUntouched && stateOf(n.id) === 'dimmed'" in html
+    assert "const gone = id => hideUntouched && stateOf(id) === 'dimmed'" in html
+    assert "hidden: gone(n.id)" in html
     assert "hideToggle.setAttribute('aria-pressed', String(hideUntouched))" in html
 
 
@@ -323,7 +324,26 @@ def test_hide_untouched_hides_bubbles_with_nothing_in_the_release():
     html = _render()
     assert "hidden: hideUntouched && !tiered" in html
     i = html.index("function applyHidden()")
-    assert "restyleBubbles();" in html[i:i + 400]
+    assert "restyleBubbles();" in html[i:i + 200]
+
+
+def test_hide_untouched_takes_hidden_things_out_of_physics():
+    # A hidden node still repels its neighbours unless physics is off too, so
+    # the survivors would stay spread across the whole canvas.
+    html = _render()
+    i = html.index("function applyGhostPhysics()")
+    assert "physics: !gone(n.id)" in html[i:i + 400]
+    assert "physics: edgePhysics(e)" in html[i:i + 900]
+    assert "physics: !(hideUntouched && !tiered)" in html[html.index("function bubbleStyle(key)"):html.index("function bubbleOpacity")]
+    # vis re-enables physics on whatever a cluster releases, so every
+    # structural change re-applies the ghost rule before re-settling.
+    j = html.index("function resettle(iterations)")
+    assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
+    # islands with no springs between them need an explicit pull, then a fit
+    # to what is left rather than the ghosts' old footprint
+    k = html.index("hideToggle.addEventListener('click'")
+    assert "if (hideUntouched) compactSurvivors();" in html[k:k + 300]
+    assert "fitVisibleWhenSettled();" in html[k:k + 300]
 
 
 def test_reset_clears_hide_untouched():

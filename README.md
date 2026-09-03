@@ -191,7 +191,10 @@ count (an amber dashed ring means it contains a peripheral neighbour, and
 the label says how many). Click a bubble to open it; click the repo node
 inside an open group to close it. **Hide untouched** removes untouched
 nodes from the layout altogether, including the bubbles of repos with
-nothing in the release. Both are toggles in the side panel, work
+nothing in the release, and pulls what is left together so the survivors
+fill the viewport instead of sitting at the far corners of the full map
+(toggle it off and the map spreads out again, settling near, not exactly
+on, its old positions). Both are toggles in the side panel, work
 on any report, and never change the tier counts, the List view or the
 exports — the Obsidian vault is always the full atlas, and Export PNG is
 whatever is on screen. The grouping choice is remembered per browser, per
