@@ -85,23 +85,40 @@ class ReportPage:
         data_url = "data:image/png;base64," + base64.b64encode(png_bytes).decode()
         return tuple(self.page.evaluate(_PIXEL_AT_ORIGIN, data_url))
 
-    # ---- grouped mode / hide untouched ----
+    # ---- lenses ----
 
     def wait_settled(self):
         """Wait for the large-graph layout overlay to clear (no-op on small graphs)."""
         self.page.wait_for_function(
             "s => document.querySelector(s).hidden", arg=S.LAYOUT_OVERLAY, timeout=60_000)
 
-    def grouping_on(self) -> bool:
-        return self.page.locator(S.GROUP_TOGGLE).get_attribute("aria-pressed") == "true"
-
-    def toggle_grouping(self):
-        self.page.click(S.GROUP_TOGGLE)
+    def switch_view(self, name: str):
+        """Click the Impact / System / List view button and wait for the layout."""
+        self.page.click(S.VIEW_BUTTON.format(name=name))
         self.wait_settled()
 
-    def toggle_hide_untouched(self):
-        self.page.click(S.HIDE_UNTOUCHED)
+    def choose_lens(self, label: str):
+        """Click a lens by its visible label (e.g. 'Release only') and wait for the layout."""
+        self.page.locator(S.LENS_BUTTON, has_text=label).first.click()
         self.wait_settled()
+
+    def active_lens(self) -> str:
+        return self.page.locator(S.LENS_BUTTON + '[aria-pressed="true"]').first.inner_text()
+
+    def lens_row_visible(self) -> bool:
+        return self.page.locator(S.LENS_ROW).is_visible()
+
+    def lens_status(self) -> str:
+        return self.page.locator("#lens-status").inner_text()
+
+    def repo_count(self) -> int:
+        return self.page.evaluate("Object.keys(membersOf).length")
+
+    def amber_bubble_count(self) -> int:
+        """Bubbles drawn with the peripheral tier's thicker dashed ring."""
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => network.isCluster(id)"
+            " && network.body.nodes[id].options.borderWidth === 2).length")
 
     def total_node_count(self) -> int:
         return self.page.evaluate("DATA.nodes.length")
