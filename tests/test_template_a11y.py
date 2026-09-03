@@ -173,13 +173,6 @@ def test_reset_clears_legend_filters():
     assert "filteredTypes.clear()" in html
 
 
-def test_filtered_untouched_fades_further():
-    # The Untouched tier is already dimmed, so filtering it drops those nodes
-    # to the spotlight background opacity instead (decluttering).
-    html = _render()
-    assert "filteredTiers.has('dimmed') ? 0.12 : 0.35" in html
-
-
 def test_system_view_filters_types():
     html = _render()
     # System-view pills dim their node type in place...
@@ -421,13 +414,27 @@ def test_roll_up_row_click_focuses_repo():
     assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
 
 
+def test_untouched_legend_entry_is_a_key_not_a_button():
+    html = _render()
+    i = html.index("function legendKey(color, text)")
+    assert "document.createElement('span')" in html[i:i + 300]
+    assert "el.className = 'chip key'" in html[i:i + 300]
+    j = html.index("function buildLegend()")
+    assert "k === 'dimmed' ? legendKey(" in html[j:j + 700]
+    assert ".chip.key{cursor:default;border-style:dashed;color:var(--muted)}" in html
+
+
+def test_untouched_fade_filter_is_gone():
+    html = _render()
+    assert "filteredTiers.has('dimmed')" not in html
+
+
 def test_bubbles_follow_legend_filters():
     # Regression: legend pills only updated the node DataSet, so in grouped
     # mode the bubbles (the untouched mass, and the amber peripheral ones)
     # ignored Untouched/Peripheral filters and System-view type filters.
     html = _render()
     assert "c.peripheral > 0 && !filteredTiers.has('peripheral')" in html
-    assert "!periph && filteredTiers.has('dimmed')" in html
     assert "filteredTypes.has('repo')" in html
 
 

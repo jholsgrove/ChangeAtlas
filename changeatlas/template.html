@@ -51,6 +51,8 @@ transition:opacity .15s;background:none;color:var(--fg)}
 .chip:hover{border-color:var(--accent)}
 .chip.off{opacity:.35}
 .chip .dot{width:10px;height:10px;border-radius:50%}
+.chip.key{cursor:default;border-style:dashed;color:var(--muted)}
+.chip.key:hover{border-color:var(--line)}
 .detail h2{font-size:16px;margin:.2em 0}
 .detail .meta{color:var(--muted);font-size:12px;margin-bottom:10px}
 .detail .badge{display:inline-block;padding:1px 8px;border-radius:12px;font-size:11px;
@@ -244,8 +246,7 @@ const effectiveState = id => {
 };
 const baseOpacity = id => {
   if (currentView === 'system') return filteredTypes.has(byId[id].type) ? 0.35 : 1;
-  if (stateOf(id) === 'dimmed')
-    return filteredTiers.has('dimmed') ? 0.12 : 0.35; // filtered untouched: near-invisible
+  if (stateOf(id) === 'dimmed') return 0.35;
   return effectiveState(id) === 'dimmed' ? 0.35 : 1;
 };
 
@@ -376,6 +377,17 @@ function legendChip(color, text, off, onToggle) {
   chip.addEventListener('click', onToggle);
   legend.appendChild(chip);
 }
+// A legend key explains a colour but does nothing: it is not a button.
+function legendKey(color, text) {
+  const el = document.createElement('span');
+  el.className = 'chip key';
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  dot.style.background = color;
+  el.appendChild(dot);
+  el.appendChild(document.createTextNode(' ' + text));
+  legend.appendChild(el);
+}
 function toggleFilter(set, key) {
   if (set.has(key)) set.delete(key); else set.add(key);
   refreshVisuals();
@@ -394,8 +406,9 @@ function buildLegend() {
     });
   } else {
     Object.keys(IMPACT).forEach(k =>
-      legendChip(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')',
-        filteredTiers.has(k), () => toggleFilter(filteredTiers, k)));
+      k === 'dimmed' ? legendKey(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')')
+      : legendChip(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')',
+          filteredTiers.has(k), () => toggleFilter(filteredTiers, k)));
   }
 }
 buildStats();
@@ -600,15 +613,13 @@ const currentLens = () => LENSES[currentView] && LENSES[currentView][lens[curren
 const collapsed = new Set();
 
 // A bubble follows the same legend filters as the nodes it stands for: in
-// Impact view a filtered Peripheral tier turns an amber bubble plain, and a
-// filtered Untouched tier fades a plain bubble the way untouched nodes fade;
-// in System view a filtered Repo type dims it like any other filtered type.
+// Impact view a filtered Peripheral tier turns an amber bubble plain; in
+// System view a filtered Repo type dims it like any other filtered type.
 function bubbleStyle(key) {
   const system = currentView === 'system';
   const c = repoSummary(key), n = (membersOf[key] || []).length;
   const periph = !system && c.peripheral > 0 && !filteredTiers.has('peripheral');
-  const faded = system ? filteredTypes.has('repo')
-                       : !periph && filteredTiers.has('dimmed');
+  const faded = system && filteredTypes.has('repo');
   const fill = system ? (faded ? PALETTE.dimmed : typeColor('repo'))
              : periph ? PALETTE.bubble_peripheral : PALETTE.bubble;
   const border = system ? fill
@@ -628,7 +639,7 @@ function bubbleStyle(key) {
     borderWidth: periph ? 2 : 1,
     shapeProperties: { borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false },
     font: { color: PALETTE.text, size: 12 },
-    opacity: faded ? (system ? 0.35 : 0.12) : 1,
+    opacity: faded ? 0.35 : 1,
     hidden: hideUntouched && !tiered,
     physics: !(hideUntouched && !tiered),   // a hidden bubble must stop repelling the survivors too
   };
