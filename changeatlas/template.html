@@ -36,6 +36,7 @@ border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;fl
 .side.collapsed .views{flex-direction:column;margin-top:10px}
 .side.collapsed .views button{font-size:0;padding:6px 0}
 .side.collapsed .views button::before{content:attr(data-abbr);font-size:12px}
+.side.collapsed .lenses{display:none}
 .side footer{border-top:1px solid var(--line);padding:10px 18px;font-size:12px;
 color:var(--muted);flex:0 0 auto}
 .side footer a{color:var(--accent);text-decoration:none}
@@ -73,13 +74,9 @@ display:inline-block;min-width:74px}
 .reading .back{color:var(--muted);cursor:pointer;font-size:12px;display:inline-block;margin-bottom:8px}
 .empty{color:var(--muted)}
 .hint{color:var(--muted);font-size:12px;margin-top:8px}
-.toggles,.actions{display:flex;gap:6px;margin-top:8px}
-.toggles button,.actions button{flex:1;background:var(--bg);color:var(--fg);border:1px solid var(--line);
-border-radius:6px;padding:6px 8px;cursor:pointer;font:inherit;font-size:12px}
-.toggles button:hover,.actions button:hover{border-color:var(--accent)}
-.toggles button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
-#group-tools[hidden]{display:none}
-#group-tools{max-height:38vh;overflow:auto}
+#roll-wrap[hidden]{display:none}
+#roll-wrap{max-height:38vh;overflow:auto}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 table.roll{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-top:10px}
 table.roll caption{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
 color:var(--muted);padding-bottom:4px}
@@ -102,6 +99,9 @@ button.reset:hover{border-color:var(--accent)}
 border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 .views button:hover{border-color:var(--accent)}
 .views button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
+.views.lenses{margin-top:6px}
+.views.lenses button{flex:1;font-size:11.5px;padding:4px 6px}
+.views.lenses[hidden]{display:none}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
@@ -161,20 +161,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         <button id="view-system" aria-pressed="false" data-abbr="S">System</button>
         <button id="view-list" aria-pressed="false" data-abbr="L">List</button>
       </div>
+      <div class="views lenses" id="lens-row" role="group" aria-label="Impact lens"></div>
+      <div id="lens-status" class="sr-only" role="status" aria-live="polite"></div>
     </h1>
     <div class="controls">
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
       <datalist id="nodelist"></datalist>
       <div class="legend" id="legend"></div>
-      <div class="toggles">
-        <button id="group-toggle" type="button" aria-pressed="false">Group by repo</button>
-        <button id="hide-untouched" type="button" aria-pressed="false">Hide untouched</button>
-      </div>
-      <div id="group-tools" hidden>
-        <div class="actions">
-          <button id="collapse-untouched" type="button">Collapse untouched repos</button>
-          <button id="expand-all" type="button">Expand all</button>
-        </div>
+      <div id="roll-wrap">
         <table class="roll" id="roll-table" aria-label="Impact per repo">
           <caption>Repos in this release</caption>
           <thead><tr><th scope="col">Repo</th><th scope="col" title="Changed">Chg</th>
@@ -184,7 +178,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         </table>
         <div class="hint" id="roll-more"></div>
       </div>
-      <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs.</div>
+      <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs. Click a bubble to open it.</div>
     </div>
     <div class="pad">
       <div class="detail" id="detail"><p class="empty">Select a node to see what it does and what it connects to.</p></div>
@@ -343,12 +337,12 @@ network.on('stabilizationIterationsDone', () => {
 // After a structural change (open/collapse a repo, hide untouched, view
 // switch) let the layout settle for a bounded number of iterations, then
 // freeze again. Small graphs keep live physics and never need this.
-function resettle(iterations) {
+function resettle(iterations, message) {
   if (hideUntouched) applyGhostPhysics();   // a cluster just opened or closed: see applyGhostPhysics
   if (!LARGE) return;
   layoutOverlay.hidden = false;
   layoutProgress.value = 0;
-  layoutText.textContent = 'Re-laying out the map…';
+  layoutText.textContent = message || 'Re-laying out the map…';
   network.setOptions({ physics: { enabled: true } });
   network.stabilize(iterations);
 }
@@ -509,7 +503,7 @@ function showNode(id) {
         '<li><a data-id="' + esc(o) + '">' + esc(byId[o].title) + '</a></li>').join('') + '</ul>';
     }
   }
-  if (n.type === 'repo' && grouped && currentView !== 'list' && membersOf[n.repo]) {
+  if (n.type === 'repo' && currentView !== 'list' && membersOf[n.repo]) {
     h += '<button type="button" class="reset" id="collapse-this" style="margin-top:10px">' +
          'Collapse ' + esc(n.title) + '</button>';
   }
@@ -581,17 +575,29 @@ const hasEvidence = key => {
   return c.changed + c.touched + c.testOnly > 0;
 };
 
-// Default: grouped above the threshold. A toggle choice is remembered per
-// browser, keyed by atlas size so small and large reports don't fight.
-const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length;
-let grouped = null;
-try {
-  const v = localStorage.getItem(GROUP_KEY);
-  if (v === 'on' || v === 'off') grouped = v === 'on';
-} catch (e) { /* storage blocked */ }
-if (grouped === null) grouped = LARGE;
+// ---- lenses: named canvas states, one remembered per view for the session.
+// `hide` — untouched nodes (and empty repo bubbles) leave the canvas.
+// `rule` — which repos collapse to bubbles: 'evidence' = those with no
+// changed/touched/test-only member, 'all' = every repo, 'none' = flat. ----
+const LENSES = {
+  impact: {
+    release: { label: 'Release only', hide: true,  rule: 'evidence' },
+    context: { label: 'In context',   hide: false, rule: 'evidence' },
+    whole:   { label: 'Whole map',    hide: false, rule: 'none' },
+  },
+  system: {
+    repos:      { label: 'Repos',      hide: false, rule: 'all' },
+    components: { label: 'Components', hide: false, rule: 'none' },
+  },
+};
+// Defaults come from size alone; nothing is remembered between opens.
+const DEFAULT_LENS = {
+  impact: LARGE ? 'context' : 'whole',
+  system: LARGE ? 'repos' : 'components',
+};
+const lens = { impact: DEFAULT_LENS.impact, system: DEFAULT_LENS.system };
+const currentLens = () => LENSES[currentView] && LENSES[currentView][lens[currentView]];
 const collapsed = new Set();
-const groupToggle = document.getElementById('group-toggle');
 
 // A bubble follows the same legend filters as the nodes it stands for: in
 // Impact view a filtered Peripheral tier turns an amber bubble plain, and a
@@ -645,20 +651,18 @@ function expandRepo(key) {
   if (network.isCluster('cl:' + key)) network.openCluster('cl:' + key);
   collapsed.delete(key);
 }
-// Bring the canvas in line with the rule: grouped + Impact view collapses
-// repos with no production/test evidence; grouped + System view collapses
-// every repo; ungrouped opens everything.
+// Bring the canvas in line with the current lens's rule, discarding any
+// bubbles the reader opened by hand.
 function applyGrouping() {
   const want = new Set();
-  if (grouped && currentView !== 'list') {
+  const L = currentLens();
+  if (L && L.rule !== 'none') {
     Object.keys(membersOf).forEach(k => {
-      if (currentView === 'system' || !hasEvidence(k)) want.add(k);
+      if (L.rule === 'all' || !hasEvidence(k)) want.add(k);
     });
   }
   [...collapsed].filter(k => !want.has(k)).forEach(expandRepo);
   want.forEach(collapseRepo);
-  document.getElementById('group-tools').hidden = !grouped || currentView === 'list';
-  groupToggle.setAttribute('aria-pressed', String(grouped));
   buildRoll();
 }
 function restyleBubbles() {   // theme or filter change: recolour without re-clustering
@@ -671,31 +675,17 @@ function focusRepo(key) {
   const anchor = repoAnchor[key];
   if (anchor) focusNode(anchor);
 }
-groupToggle.addEventListener('click', () => {
-  grouped = !grouped;
-  try { localStorage.setItem(GROUP_KEY, grouped ? 'on' : 'off'); } catch (e) { /* storage blocked */ }
-  applyGrouping();
-  resettle(150);
-});
-document.getElementById('collapse-untouched').addEventListener('click', () => {
-  applyGrouping(); resettle(100);
-});
-document.getElementById('expand-all').addEventListener('click', () => {
-  [...collapsed].forEach(expandRepo); resettle(200);
-});
-
-// ---- hide untouched: remove untouched nodes (and, via vis, their edges)
-// from the layout so what's left re-packs. Bubbles whose repo has nothing in
-// the release hide too (see bubbleStyle). Not persisted; Reset turns it off.
+// ---- hidden untouched (the Release only lens): untouched nodes and the
+// bubbles of repos with nothing in the release leave the canvas so what is
+// left re-packs.
 //
 // Hidden is not enough on its own: vis keeps a hidden node in the physics
 // simulation, so the ghosts would go on holding the survivors apart at the
 // corners of the full map. Hidden nodes, hidden bubbles and every edge that
 // touches one leave physics as well, and what remains re-packs under the
-// ordinary central gravity. Toggling back restores physics and the map
+// ordinary central gravity. Leaving the lens restores physics and the map
 // spreads out again (settling nearby, not on the exact old positions). ----
 let hideUntouched = false;
-const hideToggle = document.getElementById('hide-untouched');
 const gone = id => hideUntouched && stateOf(id) === 'dimmed';
 // Take every ghost out of the simulation. Runs on the toggle and again after
 // any bubble opens or closes, because vis switches physics back on for the
@@ -723,11 +713,6 @@ function applyGhostPhysics() {
     });
   });
   if (changed) network.body.emitter.emit('_dataChanged');
-}
-function applyHidden() {
-  applyGhostPhysics();
-  restyleBubbles();
-  hideToggle.setAttribute('aria-pressed', String(hideUntouched));
 }
 // Everything drawn at top level right now: unhidden nodes plus unhidden bubbles.
 function visibleTopIds() {
@@ -769,13 +754,47 @@ function compactSurvivors() {
   cx /= kept.length; cy /= kept.length;
   kept.forEach(id => network.moveNode(id, cx + (pos[id].x - cx) * k, cy + (pos[id].y - cy) * k));
 }
-hideToggle.addEventListener('click', () => {
-  hideUntouched = !hideUntouched;
-  applyHidden();
+// Applying a lens is always a clean re-apply, including a click on the one
+// already selected: that is how a reader closes bubbles they opened by hand.
+const lensRow = document.getElementById('lens-row');
+const lensStatus = document.getElementById('lens-status');
+function applyLens(name) {
+  const set = LENSES[currentView];
+  if (!set || !set[name]) return;
+  lens[currentView] = name;
+  const L = set[name];
+  hideUntouched = L.hide;
+  applyGrouping();
+  applyGhostPhysics();
+  restyleBubbles();
   if (hideUntouched) compactSurvivors();
+  updateLensPressed();
+  lensStatus.textContent = '';
+  lensStatus.textContent = 'Showing ' + L.label;
   fitVisibleWhenSettled();
-  resettle(120);
-});
+  resettle(120, 'Showing ' + L.label.toLowerCase() + '…');
+}
+// The row is rebuilt only on a view switch so a re-click keeps its focus.
+function buildLensRow() {
+  const set = LENSES[currentView];
+  lensRow.hidden = !set;
+  lensRow.textContent = '';
+  if (!set) return;
+  lensRow.setAttribute('aria-label', currentView === 'impact' ? 'Impact lens' : 'System lens');
+  Object.keys(set).forEach(name => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.lens = name;
+    b.textContent = set[name].label;
+    b.setAttribute('aria-pressed', String(lens[currentView] === name));
+    b.addEventListener('click', () => applyLens(name));
+    lensRow.appendChild(b);
+  });
+}
+function updateLensPressed() {
+  lensRow.querySelectorAll('button').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.lens === lens[currentView])));
+}
 
 // ---- per-repo roll-up (side panel in grouped mode; List view always) ----
 function rollRows() {
@@ -809,10 +828,8 @@ function buildRoll() {
   const rest = Object.keys(membersOf).length - rows.length;
   document.getElementById('roll-more').textContent =
     rest + ' more repo' + (rest === 1 ? '' : 's') + ' with nothing in this release.';
-  // System view has no tiers to summarise.
-  const system = currentView === 'system';
-  document.getElementById('roll-table').hidden = system;
-  document.getElementById('roll-more').hidden = system;
+  // Every Impact lens; System view has no tiers to summarise, List has its own table.
+  document.getElementById('roll-wrap').hidden = currentView !== 'impact';
 }
 
 // ---- search ----
@@ -829,15 +846,11 @@ document.getElementById('reset').onclick = () => {
   selected = null;
   filteredTiers.clear();
   filteredTypes.clear();
-  hideUntouched = false;
-  applyHidden();
   refreshVisuals();
   buildLegend();
-  applyGrouping();
   network.unselectAll();
-  network.fit({ animation: { duration: 500 } });
-  resettle(100);
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
+  if (currentView !== 'list') applyLens(DEFAULT_LENS[currentView]);
 };
 
 // ---- accessible list view (WCAG 1.1.1 / 1.4.1: non-canvas equivalent of the graph) ----
@@ -887,7 +900,8 @@ function setView(v) {
   }
   buildStats();
   buildLegend();
-  if (v !== 'list') { applyGrouping(); resettle(120); }
+  buildLensRow();
+  if (v !== 'list') applyLens(lens[v]);
 }
 function refreshVisuals() {
   const system = currentView === 'system';
@@ -1166,7 +1180,8 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   applyTheme(next);
 });
 applyTheme(theme); // initial paint: CSS vars, logo, toggle state
-applyGrouping();   // initial: collapse per rule before the first layout settles
+buildLensRow();
+applyGrouping();   // initial: collapse per the default lens before the first layout settles
 </script>
 </body>
 </html>

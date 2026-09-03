@@ -32,7 +32,7 @@ def test_main_landmark_contains_page_content():
 def test_view_control_scaffolding_present():
     html = _render()
     for frag in ('id="view-impact"', 'id="view-system"', 'id="view-list"',
-                 'id="list-view"', 'role="group" aria-label="View"'):
+                 'id="list-view"', 'role="group" aria-label="View"', 'id="lens-row"'):
         assert frag in html
 
 def test_system_view_wiring_present():
@@ -275,13 +275,108 @@ def test_layout_overlay_is_a_status_region():
     assert "<progress" in html
 
 
-def test_group_toggle_scaffolding_present():
+def test_lens_row_scaffolding_present():
     html = _render()
-    assert 'id="group-toggle"' in html
-    assert 'id="collapse-untouched"' in html and 'id="expand-all"' in html
-    assert 'id="group-tools"' in html
-    # pressed state is reflected for assistive tech
-    assert "groupToggle.setAttribute('aria-pressed', String(grouped))" in html
+    assert 'id="lens-row"' in html
+    assert 'class="views lenses" id="lens-row" role="group"' in html
+    # both labels exist so a screen reader hears which set it is
+    assert "'Impact lens'" in html and "'System lens'" in html
+    # real buttons with pressed state, like the view row
+    assert "b.setAttribute('aria-pressed', String(lens[currentView] === name))" in html
+    # out of the DOM flow (and tab order) in List view and the collapsed rail
+    assert "lensRow.hidden = !set" in html
+    assert ".side.collapsed .lenses{display:none}" in html
+
+
+def test_lens_table_has_exactly_the_five_lenses():
+    html = _render()
+    for row in (
+        "release: { label: 'Release only', hide: true,  rule: 'evidence' }",
+        "context: { label: 'In context',   hide: false, rule: 'evidence' }",
+        "whole:   { label: 'Whole map',    hide: false, rule: 'none' }",
+        "repos:      { label: 'Repos',      hide: false, rule: 'all' }",
+        "components: { label: 'Components', hide: false, rule: 'none' }",
+    ):
+        assert row in html
+    assert html.count("hide: ") == 5
+
+
+def test_lens_defaults_by_size_and_nothing_remembered():
+    html = _render()
+    assert "impact: LARGE ? 'context' : 'whole'" in html
+    assert "system: LARGE ? 'repos' : 'components'" in html
+    assert "changeatlas-group:" not in html
+
+
+def test_old_toggles_are_gone():
+    html = _render()
+    for old in ('id="group-toggle"', 'id="hide-untouched"', 'id="collapse-untouched"',
+                'id="expand-all"', 'id="group-tools"'):
+        assert old not in html
+
+
+def test_apply_lens_is_a_clean_reapply():
+    html = _render()
+    i = html.index("function applyLens(name)")
+    body = html[i:i + 1200]
+    assert "hideUntouched = L.hide;" in body
+    assert "applyGrouping();" in body            # discards manual opens, collapses per rule
+    assert "applyGhostPhysics();" in body        # after grouping: vis re-enables physics on release
+    assert "restyleBubbles();" in body
+    assert "if (hideUntouched) compactSurvivors();" in body
+    assert "fitVisibleWhenSettled();" in body
+    assert "resettle(120, 'Showing ' + L.label.toLowerCase() + '…')" in body
+
+
+def test_lens_change_is_announced():
+    html = _render()
+    assert 'id="lens-status" class="sr-only" role="status" aria-live="polite"' in html
+    assert "lensStatus.textContent = 'Showing ' + L.label" in html
+    assert ".sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}" in html
+
+
+def test_grouping_rule_comes_from_the_lens():
+    html = _render()
+    i = html.index("function applyGrouping()")
+    body = html[i:i + 600]
+    assert "const L = currentLens();" in body
+    assert "if (L && L.rule !== 'none')" in body
+    assert "if (L.rule === 'all' || !hasEvidence(k)) want.add(k);" in body
+
+
+def test_hidden_bubbles_leave_physics_and_ghosts_are_reapplied_on_resettle():
+    html = _render()
+    i = html.index("function applyGhostPhysics()")
+    assert "physics: !gone(n.id)" in html[i:i + 400]
+    assert "physics: edgePhysics(e)" in html[i:i + 900]
+    b = html[html.index("function bubbleStyle(key)"):html.index("function bubbleOpacity")]
+    assert "hidden: hideUntouched && !tiered" in b
+    assert "physics: !(hideUntouched && !tiered)" in b
+    j = html.index("function resettle(iterations, message)")
+    assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
+
+
+def test_reset_returns_to_the_default_lens():
+    html = _render()
+    i = html.index("document.getElementById('reset').onclick")
+    body = html[i:i + 900]
+    assert "filteredTiers.clear()" in body and "filteredTypes.clear()" in body
+    assert "if (currentView !== 'list') applyLens(DEFAULT_LENS[currentView]);" in body
+
+
+def test_view_switch_applies_that_views_lens():
+    html = _render()
+    i = html.index("function setView(v)")
+    body = html[i:i + 900]
+    assert "buildLensRow();" in body
+    assert "if (v !== 'list') applyLens(lens[v]);" in body
+
+
+def test_roll_up_shows_in_every_impact_lens():
+    html = _render()
+    assert 'id="roll-wrap"' in html
+    i = html.index("function buildRoll()")
+    assert "document.getElementById('roll-wrap').hidden = currentView !== 'impact';" in html[i:i + 700]
 
 
 def test_grouping_uses_native_clustering_keyed_by_repo():
@@ -293,12 +388,6 @@ def test_grouping_uses_native_clustering_keyed_by_repo():
     assert "n.repo !== 'external' && n.repo !== 'cross'" in html
 
 
-def test_grouping_default_from_threshold_and_remembered_per_atlas():
-    html = _render()
-    assert "const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length" in html
-    assert "if (grouped === null) grouped = LARGE" in html
-
-
 def test_peripheral_bubbles_not_colour_alone():
     html = _render()
     assert "borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false" in html
@@ -308,48 +397,6 @@ def test_peripheral_bubbles_not_colour_alone():
 def test_search_and_links_open_collapsed_repo_first():
     html = _render()
     assert "if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }" in html
-
-
-def test_hide_untouched_toggle_truly_hides():
-    html = _render()
-    assert 'id="hide-untouched"' in html
-    assert "const gone = id => hideUntouched && stateOf(id) === 'dimmed'" in html
-    assert "hidden: gone(n.id)" in html
-    assert "hideToggle.setAttribute('aria-pressed', String(hideUntouched))" in html
-
-
-def test_hide_untouched_hides_bubbles_with_nothing_in_the_release():
-    # Regression: Hide untouched removed member nodes but left every plain
-    # bubble on the canvas, so in grouped mode it looked like a no-op.
-    html = _render()
-    assert "hidden: hideUntouched && !tiered" in html
-    i = html.index("function applyHidden()")
-    assert "restyleBubbles();" in html[i:i + 200]
-
-
-def test_hide_untouched_takes_hidden_things_out_of_physics():
-    # A hidden node still repels its neighbours unless physics is off too, so
-    # the survivors would stay spread across the whole canvas.
-    html = _render()
-    i = html.index("function applyGhostPhysics()")
-    assert "physics: !gone(n.id)" in html[i:i + 400]
-    assert "physics: edgePhysics(e)" in html[i:i + 900]
-    assert "physics: !(hideUntouched && !tiered)" in html[html.index("function bubbleStyle(key)"):html.index("function bubbleOpacity")]
-    # vis re-enables physics on whatever a cluster releases, so every
-    # structural change re-applies the ghost rule before re-settling.
-    j = html.index("function resettle(iterations)")
-    assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
-    # islands with no springs between them need an explicit pull, then a fit
-    # to what is left rather than the ghosts' old footprint
-    k = html.index("hideToggle.addEventListener('click'")
-    assert "if (hideUntouched) compactSurvivors();" in html[k:k + 300]
-    assert "fitVisibleWhenSettled();" in html[k:k + 300]
-
-
-def test_reset_clears_hide_untouched():
-    html = _render()
-    i = html.index("document.getElementById('reset').onclick")
-    assert "hideUntouched = false" in html[i:i + 900]
 
 
 def test_roll_up_tables_present_and_accessible():
