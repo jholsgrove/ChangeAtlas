@@ -108,6 +108,10 @@ class ReportPage:
     def lens_row_visible(self) -> bool:
         return self.page.locator(S.LENS_ROW).is_visible()
 
+    def lens_row_removed_from_flow(self) -> bool:
+        """The row carries the `hidden` attribute (out of the DOM flow and tab order), not just display:none."""
+        return self.page.evaluate("s => document.querySelector(s).hidden", S.LENS_ROW)
+
     def lens_status(self) -> str:
         return self.page.locator("#lens-status").inner_text()
 

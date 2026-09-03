@@ -197,7 +197,7 @@ def test_lens_row_is_gone_in_list_view(large_report):
     assert large_report.lens_row_visible()
     large_report.switch_view("list")
     assert not large_report.lens_row_visible()
-    assert large_report.page.evaluate("document.getElementById('lens-row').hidden")
+    assert large_report.lens_row_removed_from_flow()
 
 
 def test_lens_change_is_announced(large_report):
