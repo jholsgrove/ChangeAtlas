@@ -122,7 +122,7 @@ class ReportPage:
 
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
-          const id = network.body.nodeIndices.find(i => network.isCluster(i));
+          const id = network.body.nodeIndices.find(i => network.isCluster(i) && !network.body.nodes[i].options.hidden);
           const d = network.canvasToDOM(network.getPositions([id])[id]);
           const r = document.querySelector('#graph canvas').getBoundingClientRect();
           return [r.left + d.x, r.top + d.y];
@@ -137,3 +137,26 @@ class ReportPage:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id))"
             ".map(id => network.body.nodes[id].options.opacity)")
+
+    def visible_ids(self) -> list:
+        """Ids of everything vis is drawing at top level: nodes and bubbles, not hidden."""
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => !network.body.nodes[id].options.hidden)")
+
+    def bounds_area(self, ids: list) -> float:
+        """Area (canvas units²) of the bounding box round the given node/bubble ids."""
+        return self.page.evaluate("""ids => {
+          const pos = network.getPositions(ids);
+          const xs = ids.map(i => pos[i].x), ys = ids.map(i => pos[i].y);
+          return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
+        }""", ids)
+
+    def ghosts_in_physics(self) -> int:
+        """Hidden nodes/bubbles still in the simulation, plus live springs to them."""
+        return self.page.evaluate("""() => {
+          const hidden = id => network.body.nodes[id].options.hidden;
+          const ghostNodes = network.body.nodeIndices.filter(id => hidden(id) && network.body.nodes[id].options.physics);
+          const ghostEdges = Object.values(network.body.edges).filter(e => e.options.physics && e.connected
+            && network.body.nodes[e.fromId] && network.body.nodes[e.toId] && (hidden(e.fromId) || hidden(e.toId)));
+          return ghostNodes.length + ghostEdges.length;
+        }""")

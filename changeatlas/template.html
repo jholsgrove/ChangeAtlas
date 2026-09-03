@@ -344,6 +344,7 @@ network.on('stabilizationIterationsDone', () => {
 // switch) let the layout settle for a bounded number of iterations, then
 // freeze again. Small graphs keep live physics and never need this.
 function resettle(iterations) {
+  if (hideUntouched) applyGhostPhysics();   // a cluster just opened or closed: see applyGhostPhysics
   if (!LARGE) return;
   layoutOverlay.hidden = false;
   layoutProgress.value = 0;
@@ -623,6 +624,7 @@ function bubbleStyle(key) {
     font: { color: PALETTE.text, size: 12 },
     opacity: faded ? (system ? 0.35 : 0.12) : 1,
     hidden: hideUntouched && !tiered,
+    physics: !(hideUntouched && !tiered),   // a hidden bubble must stop repelling the survivors too
   };
 }
 function bubbleOpacity(key) { return bubbleStyle(key).opacity; }
@@ -684,17 +686,94 @@ document.getElementById('expand-all').addEventListener('click', () => {
 
 // ---- hide untouched: remove untouched nodes (and, via vis, their edges)
 // from the layout so what's left re-packs. Bubbles whose repo has nothing in
-// the release hide too (see bubbleStyle). Not persisted; Reset turns it off. ----
+// the release hide too (see bubbleStyle). Not persisted; Reset turns it off.
+//
+// Hidden is not enough on its own: vis keeps a hidden node in the physics
+// simulation, so the ghosts would go on holding the survivors apart at the
+// corners of the full map. Hidden nodes, hidden bubbles and every edge that
+// touches one leave physics as well, and what remains re-packs under the
+// ordinary central gravity. Toggling back restores physics and the map
+// spreads out again (settling nearby, not on the exact old positions). ----
 let hideUntouched = false;
 const hideToggle = document.getElementById('hide-untouched');
+const gone = id => hideUntouched && stateOf(id) === 'dimmed';
+// Take every ghost out of the simulation. Runs on the toggle and again after
+// any bubble opens or closes, because vis switches physics back on for the
+// nodes and edges a cluster releases.
+function applyGhostPhysics() {
+  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: gone(n.id), physics: !gone(n.id) })));
+  // Edges: a spring to a frozen ghost would still tether a survivor in place.
+  // Repo anchors are never tiered, so a hidden bubble's members are all gone
+  // and the base edge's endpoints decide for its clustered stand-ins too.
+  const edgePhysics = e => !gone(e.from) && !gone(e.to);
+  visEdges.update(DATA.edges.map((e, i) => ({ id: 'e' + i, physics: edgePhysics(e) })));
+  // Cluster edges on the canvas were cloned from their base edges earlier and
+  // live outside the DataSet. network.updateEdge re-indexes the whole graph
+  // per call (~15 ms each, hundreds of edges), so set the option on each edge
+  // directly and re-index once.
+  let changed = false;
+  collapsed.forEach(key => {
+    if (!network.isCluster('cl:' + key)) return;
+    network.getConnectedEdges('cl:' + key).forEach(eid => {
+      const base = visEdges.get(network.getBaseEdges(eid)[0]);
+      const edge = network.body.edges[eid];
+      if (!base || !edge || edge.options.physics === edgePhysics(base)) return;
+      edge.setOptions({ physics: edgePhysics(base) });
+      changed = true;
+    });
+  });
+  if (changed) network.body.emitter.emit('_dataChanged');
+}
 function applyHidden() {
-  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: hideUntouched && stateOf(n.id) === 'dimmed' })));
+  applyGhostPhysics();
   restyleBubbles();
   hideToggle.setAttribute('aria-pressed', String(hideUntouched));
+}
+// Everything drawn at top level right now: unhidden nodes plus unhidden bubbles.
+function visibleTopIds() {
+  const bubbleHidden = {}, ids = new Set();
+  DATA.nodes.forEach(n => {
+    const top = network.findNode(n.id)[0];
+    if (top === n.id) { if (!gone(n.id)) ids.add(top); return; }
+    const key = top.slice(3);
+    if (!(key in bubbleHidden)) bubbleHidden[key] = bubbleStyle(key).hidden;
+    if (!bubbleHidden[key]) ids.add(top);
+  });
+  return [...ids];
+}
+// Once the layout has settled, frame what is left rather than the ghosts'
+// old footprint. vis emits 'stabilized' both after live physics comes to
+// rest (small graphs) and after a bounded resettle (large graphs).
+let pendingFit = null;
+function fitVisibleWhenSettled() {
+  if (pendingFit) network.off('stabilized', pendingFit);
+  pendingFit = () => {
+    pendingFit = null;
+    network.fit({ nodes: visibleTopIds(), animation: { duration: 500 } });
+  };
+  network.once('stabilized', pendingFit);
+}
+// Pull what is left toward its own centroid before settling. vis's central
+// gravity is a small constant force, so survivors with no springs between
+// them (separate islands) would sit at the corners for hundreds of
+// iterations. Scaling by sqrt(kept / total) keeps the original node density;
+// the settle then resolves whatever overlaps.
+function compactSurvivors() {
+  const kept = visibleTopIds();
+  if (kept.length < 2) return;
+  const total = new Set(DATA.nodes.map(n => network.findNode(n.id)[0])).size;
+  const k = Math.sqrt(kept.length / total);
+  const pos = network.getPositions(kept);
+  let cx = 0, cy = 0;
+  kept.forEach(id => { cx += pos[id].x; cy += pos[id].y; });
+  cx /= kept.length; cy /= kept.length;
+  kept.forEach(id => network.moveNode(id, cx + (pos[id].x - cx) * k, cy + (pos[id].y - cy) * k));
 }
 hideToggle.addEventListener('click', () => {
   hideUntouched = !hideUntouched;
   applyHidden();
+  if (hideUntouched) compactSurvivors();
+  fitVisibleWhenSettled();
   resettle(120);
 });
 
