@@ -165,15 +165,15 @@ def test_reclicking_the_active_lens_closes_hand_opened_bubbles(large_report):
 
 
 def test_release_only_hides_untouched_and_packs_the_survivors(large_report):
-    total_nodes, before_bubbles = large_report.visible_node_count(), large_report.visible_bubble_count()
+    total_nodes, before_bubbles = large_report.visible_node_count(), large_report.bubble_count()
     large_report.choose_lens("Release only")
     assert large_report.visible_node_count() < total_nodes
     # every bubble with nothing in the release goes; peripheral bubbles stay
-    assert 0 < large_report.visible_bubble_count() < before_bubbles / 4
+    assert 0 < large_report.bubble_count() < before_bubbles / 4
     survivors = large_report.visible_ids()
     compact = large_report.bounds_area(survivors)
     large_report.choose_lens("In context")          # untouched back in: the map spreads out again
-    assert large_report.visible_bubble_count() == before_bubbles
+    assert large_report.bubble_count() == before_bubbles
     assert compact < large_report.bounds_area(survivors) / 2
 
 
@@ -200,9 +200,19 @@ def test_lens_row_is_gone_in_list_view(large_report):
     assert large_report.lens_row_removed_from_flow()
 
 
-def test_lens_change_is_announced(large_report):
-    large_report.choose_lens("Release only")
-    assert large_report.lens_status() == "Showing Release only"
+def test_roll_up_table_is_gone_in_list_and_system_views(large_report):
+    assert large_report.roll_up_visible()
+    large_report.switch_view("list")
+    assert not large_report.roll_up_visible()
+    large_report.switch_view("system")
+    assert not large_report.roll_up_visible()
+    large_report.switch_view("impact")
+    assert large_report.roll_up_visible()
+
+
+def test_lens_change_is_announced(report):
+    report.choose_lens("Release only")
+    assert report.lens_status() == "Showing Release only"
 
 
 def test_peripheral_pill_turns_amber_bubbles_plain(large_report):

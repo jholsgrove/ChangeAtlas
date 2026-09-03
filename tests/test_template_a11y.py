@@ -328,6 +328,16 @@ def test_lens_change_is_announced():
     assert ".sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}" in html
 
 
+def test_lens_row_and_status_live_outside_the_heading():
+    # A heading takes its accessible name from its content; a live region or
+    # a row of buttons inside <h1> would rename the page heading on every click.
+    html = _render()
+    h1_close = html.index("</h1>")
+    assert html.index('id="lens-row"') > h1_close
+    assert html.index('id="lens-status"') > h1_close
+    assert html.index('id="lens-row"') < html.index('id="search"')
+
+
 def test_grouping_rule_comes_from_the_lens():
     html = _render()
     i = html.index("function applyGrouping()")
@@ -354,6 +364,7 @@ def test_reset_returns_to_the_default_lens():
     i = html.index("document.getElementById('reset').onclick")
     body = html[i:i + 900]
     assert "filteredTiers.clear()" in body and "filteredTypes.clear()" in body
+    assert "lens.impact = DEFAULT_LENS.impact;" in body
     assert "if (currentView !== 'list') applyLens(DEFAULT_LENS[currentView]);" in body
 
 
@@ -370,6 +381,8 @@ def test_roll_up_shows_in_every_impact_lens():
     assert 'id="roll-wrap"' in html
     i = html.index("function buildRoll()")
     assert "document.getElementById('roll-wrap').hidden = currentView !== 'impact';" in html[i:i + 700]
+    j = html.index("function setView(v)")
+    assert "document.getElementById('roll-wrap').hidden = v !== 'impact';" in html[j:j + 900]
 
 
 def test_grouping_uses_native_clustering_keyed_by_repo():

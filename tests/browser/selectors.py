@@ -12,3 +12,5 @@ LENS_ROW = "#lens-row"
 LENS_BUTTON = "#lens-row button"
 VIEW_BUTTON = "#view-{name}"      # format with impact | system | list
 LAYOUT_OVERLAY = "#layout-overlay"
+ROLL_WRAP = "#roll-wrap"
+LENS_STATUS = "#lens-status"

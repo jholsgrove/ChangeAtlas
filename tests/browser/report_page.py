@@ -113,7 +113,12 @@ class ReportPage:
         return self.page.evaluate("s => document.querySelector(s).hidden", S.LENS_ROW)
 
     def lens_status(self) -> str:
-        return self.page.locator("#lens-status").inner_text()
+        self.page.wait_for_function(
+            "s => document.querySelector(s).textContent !== ''", arg=S.LENS_STATUS)
+        return self.page.locator(S.LENS_STATUS).inner_text()
+
+    def roll_up_visible(self) -> bool:
+        return self.page.locator(S.ROLL_WRAP).is_visible()
 
     def repo_count(self) -> int:
         return self.page.evaluate("Object.keys(membersOf).length")
@@ -129,17 +134,11 @@ class ReportPage:
 
     def visible_node_count(self) -> int:
         """Nodes vis is actually drawing: not inside a bubble, not hidden."""
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => !network.body.nodes[id].options.hidden).length")
+        return self.page.evaluate("network.body.nodeIndices.length")
 
     def bubble_count(self) -> int:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
-
-    def visible_bubble_count(self) -> int:
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => network.isCluster(id)"
-            " && !network.body.nodes[id].options.hidden).length")
 
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
@@ -154,15 +153,9 @@ class ReportPage:
     def toggle_legend_chip(self, label: str):
         self.page.locator("#legend .chip", has_text=label).first.click()
 
-    def bubble_opacities(self) -> list:
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => network.isCluster(id))"
-            ".map(id => network.body.nodes[id].options.opacity)")
-
     def visible_ids(self) -> list:
         """Ids of everything vis is drawing at top level: nodes and bubbles, not hidden."""
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => !network.body.nodes[id].options.hidden)")
+        return self.page.evaluate("network.body.nodeIndices")
 
     def bounds_area(self, ids: list) -> float:
         """Area (canvas units²) of the bounding box round the given node/bubble ids."""
@@ -176,7 +169,7 @@ class ReportPage:
         """Hidden nodes/bubbles still in the simulation, plus live springs to them."""
         return self.page.evaluate("""() => {
           const hidden = id => network.body.nodes[id].options.hidden;
-          const ghostNodes = network.body.nodeIndices.filter(id => hidden(id) && network.body.nodes[id].options.physics);
+          const ghostNodes = Object.values(network.body.nodes).filter(n => n.options.hidden && n.options.physics);
           const ghostEdges = Object.values(network.body.edges).filter(e => e.options.physics && e.connected
             && network.body.nodes[e.fromId] && network.body.nodes[e.toId] && (hidden(e.fromId) || hidden(e.toId)));
           return ghostNodes.length + ghostEdges.length;

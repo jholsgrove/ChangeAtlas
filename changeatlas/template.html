@@ -89,7 +89,6 @@ table.roll tbody tr.clickable{cursor:pointer}
 table.roll tbody tr.clickable:hover td,table.roll tbody tr.clickable:hover th{background:var(--bg)}
 table.roll td.zero{color:var(--muted);opacity:.5}
 table.roll tr.periph-only th{color:var(--muted)}
-table.roll[hidden]{display:none}
 #list-repos{margin:0 0 22px;font-size:13px}
 #list-repos caption{font-size:15px;text-transform:none;letter-spacing:0;color:var(--fg);padding-bottom:10px}
 #list-repos th,#list-repos td{padding:6px 8px}
@@ -101,7 +100,7 @@ button.reset:hover{border-color:var(--accent)}
 border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 .views button:hover{border-color:var(--accent)}
 .views button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);font-weight:600}
-.views.lenses{margin-top:6px}
+.views.lenses{margin-top:0;margin-bottom:10px}
 .views.lenses button{flex:1;font-size:11.5px;padding:4px 6px}
 .views.lenses[hidden]{display:none}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
@@ -163,10 +162,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         <button id="view-system" aria-pressed="false" data-abbr="S">System</button>
         <button id="view-list" aria-pressed="false" data-abbr="L">List</button>
       </div>
-      <div class="views lenses" id="lens-row" role="group" aria-label="Impact lens"></div>
-      <div id="lens-status" class="sr-only" role="status" aria-live="polite"></div>
     </h1>
     <div class="controls">
+      <div class="views lenses" id="lens-row" role="group" aria-label="Impact lens"></div>
+      <div id="lens-status" class="sr-only" role="status" aria-live="polite"></div>
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
       <datalist id="nodelist"></datalist>
       <div class="legend" id="legend"></div>
@@ -209,10 +208,11 @@ if (theme !== 'light' && theme !== 'dark') {
 let PALETTE = PALETTES[theme];
 
 const DATA = /*__DATA__*/;
-// Large-graph handling. Above the threshold the report opens grouped by repo
-// and trades vis-network's slow initial-layout pass and live physics for a
-// settle-then-freeze cycle so a 1,000+ node canvas stays responsive. Below
-// it, every option is exactly what small reports always had.
+// Large-graph handling. Above the threshold the report opens on the In
+// context lens (untouched repos as bubbles) and trades vis-network's slow
+// initial-layout pass and live physics for a settle-then-freeze cycle so a
+// 1,000+ node canvas stays responsive. Below it, every option is exactly
+// what small reports always had.
 const GROUP_THRESHOLD = Number.isFinite(DATA.groupThreshold) ? DATA.groupThreshold : 150;
 const LARGE = DATA.nodes.length > GROUP_THRESHOLD;
 const TS = DATA.typeStyle, EL = DATA.edgeLabel;
@@ -566,7 +566,7 @@ network.on('click', p => {
   showNode(id);
 });
 
-// ---- grouped mode: collapse repos into bubbles (vis-network clustering) ----
+// ---- repo bubbles: collapse repos into clusters (vis-network clustering) ----
 // membersOf: repo key -> member node ids (the repo anchor node is not a
 // member but joins its own bubble). Externals and cross-repo messaging
 // belong to no repo and never collapse.
@@ -629,7 +629,7 @@ function bubbleStyle(key) {
   const label = repoTitle(key) + '\n' + (c.peripheral > 0 && !system
     ? c.peripheral + ' peripheral · ' + (n - c.peripheral) + ' more'
     : n + ' components');
-  // Hide untouched: a bubble whose repo has nothing in the release at all is
+  // Release only lens: a bubble whose repo has nothing in the release at all is
   // untouched in bulk and goes with it; a bubble holding peripheral (or, in
   // System view, any tiered) members stays as the summary of what's left.
   const tiered = c.changed + c.touched + c.testOnly + c.peripheral > 0;
@@ -780,8 +780,13 @@ function applyLens(name) {
   restyleBubbles();
   if (hideUntouched) compactSurvivors();
   updateLensPressed();
-  lensStatus.textContent = '';
-  lensStatus.textContent = 'Showing ' + L.label;
+  // Small graphs have no overlay to speak the change; large graphs already
+  // announce it through the overlay's own status role. Clear, then write on
+  // the next frame so a repeat of the same sentence is announced again.
+  if (!LARGE) {
+    lensStatus.textContent = '';
+    requestAnimationFrame(() => { lensStatus.textContent = 'Showing ' + L.label; });
+  }
   fitVisibleWhenSettled();
   resettle(120, 'Showing ' + L.label.toLowerCase() + '…');
 }
@@ -807,7 +812,7 @@ function updateLensPressed() {
     b.setAttribute('aria-pressed', String(b.dataset.lens === lens[currentView])));
 }
 
-// ---- per-repo roll-up (side panel in grouped mode; List view always) ----
+// ---- per-repo roll-up (side panel in Impact view; List view always) ----
 function rollRows() {
   return Object.keys(membersOf)
     .map(key => ({ key, title: repoTitle(key), c: repoSummary(key) }))
@@ -837,7 +842,7 @@ function buildRoll() {
   const rows = rollRows();
   fillRollBody(document.getElementById('roll-body'), rows, true);
   const rest = Object.keys(membersOf).length - rows.length;
-  document.getElementById('roll-more').textContent =
+  document.getElementById('roll-more').textContent = rest === 0 ? '' :
     rest + ' more repo' + (rest === 1 ? '' : 's') + ' with nothing in this release.';
   // Every Impact lens; System view has no tiers to summarise, List has its own table.
   document.getElementById('roll-wrap').hidden = currentView !== 'impact';
@@ -861,6 +866,8 @@ document.getElementById('reset').onclick = () => {
   buildLegend();
   network.unselectAll();
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
+  lens.impact = DEFAULT_LENS.impact;
+  lens.system = DEFAULT_LENS.system;
   if (currentView !== 'list') applyLens(DEFAULT_LENS[currentView]);
 };
 
@@ -912,6 +919,7 @@ function setView(v) {
   buildStats();
   buildLegend();
   buildLensRow();
+  document.getElementById('roll-wrap').hidden = v !== 'impact';
   if (v !== 'list') applyLens(lens[v]);
 }
 function refreshVisuals() {
@@ -1192,7 +1200,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
 });
 applyTheme(theme); // initial paint: CSS vars, logo, toggle state
 buildLensRow();
-applyGrouping();   // initial: collapse per the default lens before the first layout settles
+applyGrouping();   // initial: collapse per the default lens before the first layout settles. Skips applyLens on purpose: neither default lens hides, and a second stabilize() during the first would fight it.
 </script>
 </body>
 </html>

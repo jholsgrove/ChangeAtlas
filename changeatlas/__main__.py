@@ -85,8 +85,8 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
                          "(no ADO needed): 'shop' (default; 7-repo web shop) or "
                          "'large' (100-repo retail platform)")
     ap.add_argument("--group-threshold", type=int, default=150,
-                    help="node count above which the report opens grouped by repo "
-                         "(default 150); the report has a toggle either way")
+                    help="node count above which the report opens on the In context lens "
+                         "(repos as bubbles) instead of Whole map (default 150)")
     args = ap.parse_args(argv)
 
     base = Path(args.base_dir)
