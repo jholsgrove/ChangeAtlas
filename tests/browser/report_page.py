@@ -153,6 +153,15 @@ class ReportPage:
     def toggle_legend_chip(self, label: str):
         self.page.locator("#legend .chip", has_text=label).first.click()
 
+    def legend_entry_is_button(self, label: str) -> bool:
+        """A clickable chip is a <button>; a key is a <span>."""
+        return self.page.locator("#legend .chip", has_text=label).first.evaluate(
+            "el => el.tagName === 'BUTTON'")
+
+    def tiered_node_count(self) -> int:
+        """Nodes with any release tier (everything that is not untouched)."""
+        return self.page.evaluate("DATA.nodes.filter(n => stateOf(n.id) !== 'dimmed').length")
+
     def visible_ids(self) -> list:
         """Ids of everything vis is drawing at top level: nodes and bubbles, not hidden."""
         return self.page.evaluate("network.body.nodeIndices")

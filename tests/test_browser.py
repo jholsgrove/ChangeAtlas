@@ -215,6 +215,28 @@ def test_lens_change_is_announced(report):
     assert report.lens_status() == "Showing Release only"
 
 
+def test_whole_map_untouched_chip_hides_and_shows_untouched(report):
+    # The small sample opens on Whole map, the one lens where the Untouched
+    # entry is a toggle. Hiding removes the nodes (and packs the rest); the
+    # lens indicator does not move.
+    total, tiered = report.total_node_count(), report.tiered_node_count()
+    assert report.legend_entry_is_button("Untouched")
+    report.toggle_legend_chip("Untouched")
+    assert report.visible_node_count() == tiered
+    assert report.active_lens() == "Whole map"
+    report.toggle_legend_chip("Untouched")
+    assert report.visible_node_count() == total
+
+
+def test_untouched_chip_is_a_key_outside_whole_map(large_report):
+    assert large_report.active_lens() == "In context"
+    assert not large_report.legend_entry_is_button("Untouched")
+    large_report.choose_lens("Whole map")
+    assert large_report.legend_entry_is_button("Untouched")
+    large_report.choose_lens("Release only")
+    assert not large_report.legend_entry_is_button("Untouched")
+
+
 def test_peripheral_pill_turns_amber_bubbles_plain(large_report):
     assert large_report.amber_bubble_count() > 0
     large_report.toggle_legend_chip("Peripheral")

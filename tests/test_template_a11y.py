@@ -311,20 +311,29 @@ def test_old_toggles_are_gone():
 def test_apply_lens_is_a_clean_reapply():
     html = _render()
     i = html.index("function applyLens(name)")
-    body = html[i:i + 1200]
+    body = html[i:i + 900]
     assert "hideUntouched = L.hide;" in body
     assert "applyGrouping();" in body            # discards manual opens, collapses per rule
-    assert "applyGhostPhysics();" in body        # after grouping: vis re-enables physics on release
-    assert "restyleBubbles();" in body
-    assert "if (hideUntouched) compactSurvivors();" in body
-    assert "fitVisibleWhenSettled();" in body
-    assert "resettle(120, 'Showing ' + L.label.toLowerCase() + '…')" in body
+    assert "buildLegend();" in body              # the Untouched entry is a toggle only on Whole map
+    assert "settleCanvas('Showing ' + L.label);" in body
+
+
+def test_settle_canvas_is_the_shared_tail():
+    # Lens changes and the Untouched toggle both end the same way: ghosts out
+    # of (or back into) physics, bubbles restyled, survivors packed when
+    # hiding, then settle and frame what is left.
+    html = _render()
+    k = html.index("function settleCanvas(label)")
+    tail = html[k:k + 700]
+    for frag in ("applyGhostPhysics();", "restyleBubbles();", "if (hideUntouched) compactSurvivors();",
+                 "fitVisibleWhenSettled();", "resettle(120, label + '…');"):
+        assert frag in tail, frag
 
 
 def test_lens_change_is_announced():
     html = _render()
     assert 'id="lens-status" class="sr-only" role="status" aria-live="polite"' in html
-    assert "lensStatus.textContent = 'Showing ' + L.label" in html
+    assert "lensStatus.textContent = label" in html
     assert ".sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}" in html
 
 
@@ -427,14 +436,38 @@ def test_roll_up_row_click_focuses_repo():
     assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
 
 
-def test_untouched_legend_entry_is_a_key_not_a_button():
+def test_untouched_legend_entry_is_a_toggle_only_on_whole_map():
+    # Whole map is the one lens that shows untouched nodes flat, so it is the
+    # one place the Untouched entry hides and shows them. On Release only they
+    # are already gone; on In context hiding them would just be Release only.
     html = _render()
+    assert "const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole'" in html
+    j = html.index("function buildLegend()")
+    body = html[j:j + 900]
+    assert "else if (untouchedToggleable()) legendChip(IMPACT[k].color, text, hideUntouched, toggleUntouched);" in body
+    assert "else legendKey(IMPACT[k].color, text);" in body
     i = html.index("function legendKey(color, text)")
     assert "document.createElement('span')" in html[i:i + 300]
     assert "el.className = 'chip key'" in html[i:i + 300]
-    j = html.index("function buildLegend()")
-    assert "k === 'dimmed' ? legendKey(" in html[j:j + 700]
     assert ".chip.key{cursor:default;border-style:dashed;color:var(--muted)}" in html
+
+
+def test_legend_is_first_built_after_the_lens_state_exists():
+    # Regression: buildLegend() reads lens.impact via untouchedToggleable(); an
+    # early call before `const lens` threw a TDZ ReferenceError and killed the page.
+    html = _render()
+    first_build = html.index("\nbuildLegend();")
+    assert html.index("const lens = {") < first_build
+    assert html.index("const untouchedToggleable") < first_build
+
+
+def test_untouched_toggle_flips_hide_and_settles():
+    html = _render()
+    i = html.index("function toggleUntouched()")
+    body = html[i:i + 300]
+    assert "hideUntouched = !hideUntouched;" in body
+    assert "buildLegend();" in body
+    assert "settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');" in body
 
 
 def test_untouched_fade_filter_is_gone():

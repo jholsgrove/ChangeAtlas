@@ -405,14 +405,15 @@ function buildLegend() {
         filteredTypes.has(t), () => toggleFilter(filteredTypes, t));
     });
   } else {
-    Object.keys(IMPACT).forEach(k =>
-      k === 'dimmed' ? legendKey(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')')
-      : legendChip(IMPACT[k].color, IMPACT[k].label + ' (' + counts[k] + ')',
-          filteredTiers.has(k), () => toggleFilter(filteredTiers, k)));
+    Object.keys(IMPACT).forEach(k => {
+      const text = IMPACT[k].label + ' (' + counts[k] + ')';
+      if (k !== 'dimmed') legendChip(IMPACT[k].color, text, filteredTiers.has(k), () => toggleFilter(filteredTiers, k));
+      else if (untouchedToggleable()) legendChip(IMPACT[k].color, text, hideUntouched, toggleUntouched);
+      else legendKey(IMPACT[k].color, text);
+    });
   }
 }
-buildStats();
-buildLegend();
+buildStats();   // the legend is built at bootstrap, once the lens state it reads exists
 
 // ---- search datalist ----
 const dl = document.getElementById('nodelist');
@@ -776,19 +777,37 @@ function applyLens(name) {
   const L = set[name];
   hideUntouched = L.hide;
   applyGrouping();
+  updateLensPressed();
+  buildLegend();
+  settleCanvas('Showing ' + L.label);
+}
+// Whole map is the one lens that shows untouched nodes flat, so it is the one
+// place the Untouched legend entry hides and shows them (Release only has
+// already hidden them; In context plus hiding is just Release only). The lens
+// indicator stays put: this is a refinement, undone by re-clicking the lens
+// or by Reset.
+const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole';
+function toggleUntouched() {
+  hideUntouched = !hideUntouched;
+  buildLegend();
+  settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');
+}
+// Shared tail of a lens change and the Untouched toggle: ghosts out of (or
+// back into) physics, bubbles restyled, survivors packed when hiding, then
+// settle and frame what is left. `label` is what assistive tech hears.
+function settleCanvas(label) {
   applyGhostPhysics();
   restyleBubbles();
   if (hideUntouched) compactSurvivors();
-  updateLensPressed();
   // Small graphs have no overlay to speak the change; large graphs already
   // announce it through the overlay's own status role. Clear, then write on
   // the next frame so a repeat of the same sentence is announced again.
   if (!LARGE) {
     lensStatus.textContent = '';
-    requestAnimationFrame(() => { lensStatus.textContent = 'Showing ' + L.label; });
+    requestAnimationFrame(() => { lensStatus.textContent = label; });
   }
   fitVisibleWhenSettled();
-  resettle(120, 'Showing ' + L.label.toLowerCase() + '…');
+  resettle(120, label + '…');
 }
 // The row is rebuilt only on a view switch so a re-click keeps its focus.
 function buildLensRow() {
@@ -1200,6 +1219,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
 });
 applyTheme(theme); // initial paint: CSS vars, logo, toggle state
 buildLensRow();
+buildLegend();
 applyGrouping();   // initial: collapse per the default lens before the first layout settles. Skips applyLens on purpose: neither default lens hides, and a second stabilize() during the first would fight it.
 </script>
 </body>

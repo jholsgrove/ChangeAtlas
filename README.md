@@ -195,7 +195,9 @@ view switch. In Impact view:
   touched or test-only component is one bubble labelled with its name and
   component count (an amber dashed ring means it contains a peripheral
   neighbour, and the label says how many).
-- **Whole map** — everything flat, untouched faded.
+- **Whole map** — everything flat, untouched faded. Here the Untouched
+  chip in the legend is a toggle: click it to hide the untouched nodes (the
+  rest pull together) and again to bring them back.
 
 In System view the lenses are **Repos** (every repo a bubble) and
 **Components** (flat). Above `--group-threshold` components (default 150) a
