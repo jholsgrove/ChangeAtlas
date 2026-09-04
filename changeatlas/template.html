@@ -548,12 +548,18 @@ function showNode(id) {
   detail.setAttribute('tabindex', '-1');
   detail.focus();
 }
-function closeDetail() {
+// Drop the selection and its spotlight; the panel goes back to its prompt.
+function clearSelection() {
   selected = null;
   clearSpotlight();
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
+}
+function closeDetail() {
+  clearSelection();
   container.focus();
 }
+// A node the reader can see: at top level (not inside a bubble) and not hidden.
+const drawn = id => network.findNode(id)[0] === id && !gone(id);
 detail.addEventListener('keydown', ev => {
   if (ev.key === 'Escape') closeDetail();
 });
@@ -572,7 +578,11 @@ network.on('click', p => {
     const key = id.slice(3);
     expandRepo(key);
     resettle(60);
-    if (repoAnchor[key]) showNode(repoAnchor[key]);
+    // Show the repo node only if the lens actually draws it: on Release only
+    // it is untouched and hidden, and selecting a node nobody can see would
+    // spotlight its neighbours and fade the whole release to grey.
+    const anchor = repoAnchor[key];
+    if (anchor && drawn(anchor)) showNode(anchor); else clearSelection();
     return;
   }
   showNode(id);
@@ -866,6 +876,9 @@ function toggleUntouched() {
 function settleCanvas(label) {
   applyGhostPhysics();
   restyleBubbles();
+  // A selection the lens just hid (or folded into a bubble) would keep its
+  // spotlight on the survivors; drop it, leaving focus where the reader is.
+  if (selected && !drawn(selected)) clearSelection();
   if (hideUntouched) compactSurvivors();
   // The note is the live region: clear, then write on the next frame so a
   // repeat of the same sentence is announced again.

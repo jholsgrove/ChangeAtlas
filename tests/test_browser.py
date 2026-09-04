@@ -390,3 +390,20 @@ def test_opening_a_bubble_keeps_the_readers_zoom(large_report):
     assert large_report.scale() == 2.5
     large_report.click_first_bubble()
     assert large_report.scale() == pytest.approx(2.5), "zoom was reset when a bubble opened"
+
+
+def test_opening_a_bubble_on_release_only_does_not_fade_the_release(large_report):
+    # The bubble's repo node is untouched, so it is hidden on this lens: selecting
+    # it would spotlight a node nobody can see and fade everything else to grey.
+    large_report.choose_lens("Release only")
+    large_report.click_first_bubble()
+    assert large_report.spotlit_residue() == 0, "release nodes faded behind a hidden selection"
+    assert large_report.selected_id() is None
+
+
+def test_lens_change_drops_a_selection_it_hides(large_report):
+    large_report.click_untouched_bubble()             # selects the repo node it opened
+    assert large_report.selected_id() is not None
+    large_report.choose_lens("Release only")          # that repo node is now hidden
+    assert large_report.selected_id() is None
+    assert large_report.spotlit_residue() == 0, "release nodes faded behind a hidden selection"

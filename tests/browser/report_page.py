@@ -229,6 +229,24 @@ class ReportPage:
     def node_opacity(self, node_id: str) -> float:
         return self.page.evaluate("id => network.body.nodes[id].options.opacity", node_id)
 
+    def spotlit_residue(self) -> int:
+        """Drawn nodes and bubbles faded below their resting opacity (a spotlight with no visible owner)."""
+        return self.page.evaluate("""() => network.body.nodeIndices.filter(id => {
+          const rest = network.isCluster(id) ? bubbleOpacity(id.slice(3)) : baseOpacity(id);
+          return network.body.nodes[id].options.opacity < rest;
+        }).length""")
+
+    def click_untouched_bubble(self):
+        """Open a bubble whose repo has nothing at all in the release."""
+        x, y = self.page.evaluate("""() => {
+          const k = [...collapsed].find(k => { const c = repoSummary(k); return c.changed + c.touched + c.testOnly + c.peripheral === 0; });
+          const d = network.canvasToDOM(network.getPositions(['cl:' + k])['cl:' + k]);
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          return [r.left + d.x, r.top + d.y];
+        }""")
+        self.page.mouse.click(x, y)
+        self.wait_settled()
+
     def selected_id(self):
         return self.page.evaluate("selected")
 
