@@ -14,7 +14,10 @@ runtime that static checks can't see. Currently two:
   * the hover spotlight yields back to the selected node once the pointer
     leaves (hoverNode/blurNode are vis canvas events),
   * the lens caption and the canvas note say what the active lens did, with
-    counts taken from the clustered/hidden state vis actually holds.
+    counts taken from the clustered/hidden state vis actually holds,
+  * bubble work on the 100-repo sample is batched: a hover, a lens change or
+    a legend chip re-indexes the graph a handful of times, not once per
+    bubble (vis-network's `_dataChanged` is a full O(nodes+edges) rebuild).
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -178,7 +181,10 @@ def test_release_only_hides_untouched_and_packs_the_survivors(large_report):
     compact = large_report.bounds_area(survivors)
     large_report.choose_lens("In context")          # untouched back in: the map spreads out again
     assert large_report.bubble_count() == before_bubbles
-    assert compact < large_report.bounds_area(survivors) / 2
+    # Spreads back to about its opening footprint. (It used to more than double:
+    # 1,400 nodes inside bubbles were re-entering physics and pushing the
+    # bubbles apart, with half of them overlapping. Those stay frozen now.)
+    assert compact < large_report.bounds_area(survivors) * 0.75
 
 
 def test_opening_a_bubble_on_release_only_leaves_no_ghosts_in_physics(large_report):
@@ -327,3 +333,80 @@ def test_view_buttons_keep_their_tooltips_expanded_and_collapsed(report):
     assert expanded["impact"] in report.view_tooltip("impact")
     report.toggle_side_panel()
     assert report.view_tooltip("impact") == expanded["impact"]
+
+
+# A "rebuild" is one vis-network `_dataChanged`: ~20 ms on the 100-repo sample.
+# Before batching, every bubble cost one per action (94 bubbles => ~1.9 s).
+MAX_REBUILDS_PER_ACTION = 8
+MAX_BLOCKED_MS = 500
+# A lens change also re-clusters 94 repos and re-lays the map out: ~250 ms on
+# a laptop, up to ~800 ms on shared CI runners (5.8 s before batching).
+MAX_BLOCKED_MS_RELAYOUT = 2000
+
+
+def test_hovering_on_the_large_map_does_not_rebuild_once_per_bubble(large_report):
+    a, b = large_report.unconnected_node_pair()
+    assert large_report.bubble_count() > MAX_REBUILDS_PER_ACTION
+    large_report.start_measuring()
+    large_report.hover_node(a)
+    large_report.move_mouse_off_nodes()
+    m = large_report.stop_measuring()
+    assert m["rebuilds"] <= MAX_REBUILDS_PER_ACTION, m
+    assert m["blockedMs"] < MAX_BLOCKED_MS, m
+
+
+def test_lens_change_on_the_large_map_reclusters_in_a_few_rebuilds(large_report):
+    large_report.choose_lens("Whole map")
+    large_report.start_measuring()
+    large_report.choose_lens("In context")     # 94 repos collapse again
+    m = large_report.stop_measuring()
+    assert large_report.bubble_count() > MAX_REBUILDS_PER_ACTION
+    assert m["rebuilds"] <= MAX_REBUILDS_PER_ACTION, m
+    assert m["blockedMs"] < MAX_BLOCKED_MS_RELAYOUT, m
+
+
+def test_legend_chip_on_the_large_map_restyles_bubbles_in_one_rebuild(large_report):
+    assert large_report.bubble_count() > MAX_REBUILDS_PER_ACTION
+    large_report.start_measuring()
+    large_report.toggle_legend_chip("Peripheral")
+    m = large_report.stop_measuring()
+    assert large_report.amber_bubble_count() == 0      # the chip still does its job
+    assert m["rebuilds"] <= MAX_REBUILDS_PER_ACTION, m
+    assert m["blockedMs"] < MAX_BLOCKED_MS, m
+
+
+def test_lens_change_leaves_nodes_inside_bubbles_out_of_physics(large_report):
+    # applyGhostPhysics re-enables physics on every unhidden node; the ones
+    # inside a bubble must stay frozen or the settle simulates the whole map.
+    assert large_report.children_in_physics() == 0
+    large_report.choose_lens("Whole map")
+    large_report.choose_lens("In context")
+    assert large_report.children_in_physics() == 0
+    large_report.choose_lens("Release only")
+    assert large_report.children_in_physics() == 0
+
+
+def test_opening_a_bubble_keeps_the_readers_zoom(large_report):
+    # vis refits the whole map after every stabilize() unless told not to;
+    # the resettle that follows a bubble opening must not throw the zoom away.
+    large_report.zoom_to(2.5)
+    assert large_report.scale() == 2.5
+    large_report.click_first_bubble()
+    assert large_report.scale() == pytest.approx(2.5), "zoom was reset when a bubble opened"
+
+
+def test_opening_a_bubble_on_release_only_does_not_fade_the_release(large_report):
+    # The bubble's repo node is untouched, so it is hidden on this lens: selecting
+    # it would spotlight a node nobody can see and fade everything else to grey.
+    large_report.choose_lens("Release only")
+    large_report.click_first_bubble()
+    assert large_report.spotlit_residue() == 0, "release nodes faded behind a hidden selection"
+    assert large_report.selected_id() is None
+
+
+def test_lens_change_drops_a_selection_it_hides(large_report):
+    large_report.click_untouched_bubble()             # selects the repo node it opened
+    assert large_report.selected_id() is not None
+    large_report.choose_lens("Release only")          # that repo node is now hidden
+    assert large_report.selected_id() is None
+    assert large_report.spotlit_residue() == 0, "release nodes faded behind a hidden selection"

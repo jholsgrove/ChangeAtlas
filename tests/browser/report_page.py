@@ -161,6 +161,16 @@ class ReportPage:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
 
+    def zoom_to(self, scale: float):
+        """Zoom the canvas (like the wheel), keeping the first bubble in view."""
+        self.page.evaluate("""scale => {
+          const id = network.body.nodeIndices.find(i => network.isCluster(i) && !network.body.nodes[i].options.hidden);
+          network.moveTo({ scale, position: network.getPositions([id])[id] });
+        }""", scale)
+
+    def scale(self) -> float:
+        return self.page.evaluate("network.getScale()")
+
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
           const id = network.body.nodeIndices.find(i => network.isCluster(i) && !network.body.nodes[i].options.hidden);
@@ -197,7 +207,18 @@ class ReportPage:
         self.page.mouse.click(x, y)
 
     def hover_node(self, node_id: str):
+        # A dot on the settled 100-repo map is ~3 px across on screen, and vis
+        # only hit-tests on a mousemove against the last drawn frame, so a
+        # single move at that size misses now and then on a slow CI runner.
+        # Centre the node at 1:1 or better, let a frame paint, approach in two
+        # moves.
+        self.page.evaluate("""id => {
+          const pos = network.getPositions([id])[id];
+          network.moveTo({ position: pos, scale: Math.max(network.getScale(), 1) });
+        }""", node_id)
+        self.page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
         x, y = self._dom_point_of(node_id)
+        self.page.mouse.move(x + 40, y + 40)
         self.page.mouse.move(x, y)
         self.page.wait_for_function(
             "id => network.body.nodes[id].hover === true", arg=node_id)
@@ -218,6 +239,24 @@ class ReportPage:
 
     def node_opacity(self, node_id: str) -> float:
         return self.page.evaluate("id => network.body.nodes[id].options.opacity", node_id)
+
+    def spotlit_residue(self) -> int:
+        """Drawn nodes and bubbles faded below their resting opacity (a spotlight with no visible owner)."""
+        return self.page.evaluate("""() => network.body.nodeIndices.filter(id => {
+          const rest = network.isCluster(id) ? bubbleOpacity(id.slice(3)) : baseOpacity(id);
+          return network.body.nodes[id].options.opacity < rest;
+        }).length""")
+
+    def click_untouched_bubble(self):
+        """Open a bubble whose repo has nothing at all in the release."""
+        x, y = self.page.evaluate("""() => {
+          const k = [...collapsed].find(k => { const c = repoSummary(k); return c.changed + c.touched + c.testOnly + c.peripheral === 0; });
+          const d = network.canvasToDOM(network.getPositions(['cl:' + k])['cl:' + k]);
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          return [r.left + d.x, r.top + d.y];
+        }""")
+        self.page.mouse.click(x, y)
+        self.wait_settled()
 
     def selected_id(self):
         return self.page.evaluate("selected")
@@ -252,6 +291,45 @@ class ReportPage:
           const xs = ids.map(i => pos[i].x), ys = ids.map(i => pos[i].y);
           return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
         }""", ids)
+
+    def children_in_physics(self) -> int:
+        """Nodes inside a bubble that vis is still simulating (they should all be frozen)."""
+        return self.page.evaluate(
+            "Object.values(network.body.nodes).filter(n => n.options.physics"
+            " && network.clustering.clusteredNodes[n.id]).length")
+
+    # ---- responsiveness ----
+
+    def start_measuring(self):
+        """Count full graph re-indexes and main-thread blocking until stop_measuring().
+
+        vis-network rebuilds edge, cluster, physics and index state on every
+        `_dataChanged`; one rebuild is ~20 ms on the 1,500-node sample, so an
+        action that emits once per bubble blocks the page for seconds.
+        """
+        self.page.evaluate("""() => {
+          const em = network.body.emitter, orig = em.emit;
+          window.__perf = { rebuilds: 0, blockedMs: 0, orig };
+          em.emit = function (name) {
+            if (name === '_dataChanged') window.__perf.rebuilds++;
+            return orig.apply(this, arguments);
+          };
+          window.__perf.obs = new PerformanceObserver(list =>
+            list.getEntries().forEach(e => { window.__perf.blockedMs += e.duration; }));
+          window.__perf.obs.observe({ type: 'longtask' });
+        }""")
+
+    def stop_measuring(self) -> dict:
+        """{'rebuilds': int, 'blockedMs': float} since start_measuring()."""
+        self.page.wait_for_timeout(150)   # long-task entries are delivered asynchronously
+        return self.page.evaluate("""() => {
+          const p = window.__perf;
+          p.obs.takeRecords().forEach(e => { p.blockedMs += e.duration; });
+          p.obs.disconnect();
+          network.body.emitter.emit = p.orig;
+          delete window.__perf;
+          return { rebuilds: p.rebuilds, blockedMs: Math.round(p.blockedMs) };
+        }""")
 
     def ghosts_in_physics(self) -> int:
         """Hidden nodes/bubbles still in the simulation, plus live springs to them."""
