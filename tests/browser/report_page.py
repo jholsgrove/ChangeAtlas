@@ -161,6 +161,16 @@ class ReportPage:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
 
+    def zoom_to(self, scale: float):
+        """Zoom the canvas (like the wheel), keeping the first bubble in view."""
+        self.page.evaluate("""scale => {
+          const id = network.body.nodeIndices.find(i => network.isCluster(i) && !network.body.nodes[i].options.hidden);
+          network.moveTo({ scale, position: network.getPositions([id])[id] });
+        }""", scale)
+
+    def scale(self) -> float:
+        return self.page.evaluate("network.getScale()")
+
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
           const id = network.body.nodeIndices.find(i => network.isCluster(i) && !network.body.nodes[i].options.hidden);

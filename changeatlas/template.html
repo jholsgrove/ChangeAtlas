@@ -324,7 +324,11 @@ const network = new vis.Network(container, { nodes: visNodes, edges: visEdges },
   layout: { improvedLayout: !LARGE },
   physics: { barnesHut: { gravitationalConstant: -8000, springLength: 110,
              springConstant: 0.03, damping: 0.4 },
-             stabilization: { iterations: 250, updateInterval: 25 } },
+             // fit:false — vis would otherwise refit the whole map after every
+             // stabilize(), throwing the reader's zoom away each time a bubble
+             // opens. The first layout fits once, below; lens changes frame
+             // what they leave visible themselves.
+             stabilization: { iterations: 250, updateInterval: 25, fit: false } },
   interaction: { hover: true, tooltipDelay: 120, navigationButtons: false, keyboard: false,
                  hideEdgesOnDrag: LARGE, hideEdgesOnZoom: LARGE },
 });
@@ -337,8 +341,10 @@ layoutOverlay.hidden = !LARGE;
 network.on('stabilizationProgress', p => {
   layoutProgress.value = Math.round(100 * p.iterations / p.total);
 });
+let fittedOnce = false;
 network.on('stabilizationIterationsDone', () => {
   if (LARGE) network.setOptions({ physics: { enabled: false } });
+  if (!fittedOnce) { fittedOnce = true; network.fit(); }   // first layout only
   layoutOverlay.hidden = true;
 });
 // After a structural change (open/collapse a repo, hide untouched, view

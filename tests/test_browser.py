@@ -381,3 +381,12 @@ def test_lens_change_leaves_nodes_inside_bubbles_out_of_physics(large_report):
     assert large_report.children_in_physics() == 0
     large_report.choose_lens("Release only")
     assert large_report.children_in_physics() == 0
+
+
+def test_opening_a_bubble_keeps_the_readers_zoom(large_report):
+    # vis refits the whole map after every stabilize() unless told not to;
+    # the resettle that follows a bubble opening must not throw the zoom away.
+    large_report.zoom_to(2.5)
+    assert large_report.scale() == 2.5
+    large_report.click_first_bubble()
+    assert large_report.scale() == pytest.approx(2.5), "zoom was reset when a bubble opened"
