@@ -32,7 +32,7 @@ def test_main_landmark_contains_page_content():
 def test_view_control_scaffolding_present():
     html = _render()
     for frag in ('id="view-impact"', 'id="view-system"', 'id="view-list"',
-                 'id="list-view"', 'role="group" aria-label="View"'):
+                 'id="list-view"', 'role="group" aria-label="View"', 'id="lens-row"'):
         assert frag in html
 
 def test_system_view_wiring_present():
@@ -173,13 +173,6 @@ def test_reset_clears_legend_filters():
     assert "filteredTypes.clear()" in html
 
 
-def test_filtered_untouched_fades_further():
-    # The Untouched tier is already dimmed, so filtering it drops those nodes
-    # to the spotlight background opacity instead (decluttering).
-    html = _render()
-    assert "filteredTiers.has('dimmed') ? 0.12 : 0.35" in html
-
-
 def test_system_view_filters_types():
     html = _render()
     # System-view pills dim their node type in place...
@@ -275,13 +268,172 @@ def test_layout_overlay_is_a_status_region():
     assert "<progress" in html
 
 
-def test_group_toggle_scaffolding_present():
+def test_lens_row_scaffolding_present():
     html = _render()
-    assert 'id="group-toggle"' in html
-    assert 'id="collapse-untouched"' in html and 'id="expand-all"' in html
-    assert 'id="group-tools"' in html
-    # pressed state is reflected for assistive tech
-    assert "groupToggle.setAttribute('aria-pressed', String(grouped))" in html
+    assert 'id="lens-row"' in html
+    assert 'class="views lenses" id="lens-row" role="group"' in html
+    # both labels exist so a screen reader hears which set it is
+    assert "'Impact lens'" in html and "'System lens'" in html
+    # real buttons with pressed state, like the view row
+    assert "b.setAttribute('aria-pressed', String(lens[currentView] === name))" in html
+    # out of the DOM flow (and tab order) in List view and the collapsed rail
+    assert "lensRow.hidden = !set" in html
+    assert ".side.collapsed .lenses,.side.collapsed #lens-caption{display:none}" in html
+
+
+def test_lens_table_has_exactly_the_five_lenses():
+    html = _render()
+    for row in (
+        "release: { label: 'Release only', hide: true,  rule: 'evidence',",
+        "context: { label: 'In context',   hide: false, rule: 'evidence',",
+        "whole:   { label: 'Whole map',    hide: false, rule: 'none',",
+        "repos:      { label: 'Repos',      hide: false, rule: 'all',",
+        "components: { label: 'Components', hide: false, rule: 'none',",
+    ):
+        assert row in html
+    assert html.count("hide: ") == 5
+
+
+def test_lens_defaults_by_size_and_nothing_remembered():
+    html = _render()
+    assert "impact: LARGE ? 'context' : 'whole'" in html
+    assert "system: LARGE ? 'repos' : 'components'" in html
+    assert "changeatlas-group:" not in html
+
+
+def test_old_toggles_are_gone():
+    html = _render()
+    for old in ('id="group-toggle"', 'id="hide-untouched"', 'id="collapse-untouched"',
+                'id="expand-all"', 'id="group-tools"'):
+        assert old not in html
+
+
+def test_apply_lens_is_a_clean_reapply():
+    html = _render()
+    i = html.index("function applyLens(name)")
+    body = html[i:i + 900]
+    assert "hideUntouched = L.hide;" in body
+    assert "applyGrouping();" in body            # discards manual opens, collapses per rule
+    assert "buildLegend();" in body              # the Untouched entry is a toggle only on Whole map
+    assert "settleCanvas('Showing ' + L.label);" in body
+
+
+def test_settle_canvas_is_the_shared_tail():
+    # Lens changes and the Untouched toggle both end the same way: ghosts out
+    # of (or back into) physics, bubbles restyled, survivors packed when
+    # hiding, then settle and frame what is left.
+    html = _render()
+    k = html.index("function settleCanvas(label)")
+    tail = html[k:k + 700]
+    for frag in ("applyGhostPhysics();", "restyleBubbles();", "if (hideUntouched) compactSurvivors();",
+                 "fitVisibleWhenSettled();", "resettle(120, label + '…');"):
+        assert frag in tail, frag
+
+
+def test_lens_note_is_the_visible_live_region():
+    # The canvas note is what sighted readers see AND what assistive tech
+    # hears after a lens change: one sentence, one live region, no separate
+    # visually-hidden announcer. It sits over the map (inside <main>) and is
+    # drawn in full text colour on the panel surface, not faded.
+    html = _render()
+    assert 'id="lens-note" role="status" aria-live="polite"' in html
+    assert 'id="lens-status"' not in html
+    assert html.index("<main") < html.index('id="lens-note"') < html.index("</main>")
+    assert "#lens-note{" in html
+    css = html[html.index("#lens-note{"):html.index("}", html.index("#lens-note{"))]
+    assert "color:var(--fg)" in css and "background:var(--panel)" in css
+    assert "opacity" not in css
+
+
+def test_lens_note_describes_what_the_lens_did():
+    html = _render()
+    assert "function describeLens()" in html
+    assert "lensNote.textContent = describeLens()" in html
+    for frag in ("' in this release shown, '", "' untouched hidden.'",
+                 "' with nothing in this release collapsed into bubbles, '", "' inside.'",
+                 "' untouched faded.'", "' as bubbles. Click one to open it.'",
+                 "lensNote.textContent = describeLens();   // the note has no settle to wait for at bootstrap"):
+        assert frag in html, frag
+
+
+def test_view_buttons_have_tooltips():
+    html = _render()
+    for frag in (
+        'id="view-impact" title="',
+        'id="view-system" title="',
+        'id="view-list" title="',
+    ):
+        assert frag in html, frag
+
+
+def test_lens_caption_and_tooltips_come_from_the_lens_table():
+    html = _render()
+    assert html.count("desc: '") == 5
+    assert 'class="hint" id="lens-caption"' in html
+    assert "b.title = set[name].desc" in html
+    assert "lensCaption.textContent = " in html
+    # gone with the row in List view and the collapsed rail
+    assert "lensCaption.hidden = !set" in html
+    assert ".side.collapsed .lenses,.side.collapsed #lens-caption{display:none}" in html
+
+
+def test_lens_row_and_status_live_outside_the_heading():
+    # A heading takes its accessible name from its content; a live region or
+    # a row of buttons inside <h1> would rename the page heading on every click.
+    html = _render()
+    h1_close = html.index("</h1>")
+    assert html.index('id="lens-row"') > h1_close
+    assert html.index('id="lens-caption"') > h1_close
+    assert html.index('id="lens-row"') < html.index('id="search"')
+
+
+def test_grouping_rule_comes_from_the_lens():
+    html = _render()
+    i = html.index("function applyGrouping()")
+    body = html[i:i + 600]
+    assert "const L = currentLens();" in body
+    assert "if (L && L.rule !== 'none')" in body
+    assert "if (L.rule === 'all' || !hasEvidence(k)) want.add(k);" in body
+
+
+def test_hidden_bubbles_leave_physics_and_ghosts_are_reapplied_on_resettle():
+    html = _render()
+    i = html.index("function applyGhostPhysics()")
+    assert "physics: !gone(n.id)" in html[i:i + 400]
+    assert "physics: edgePhysics(e)" in html[i:i + 900]
+    b = html[html.index("function bubbleStyle(key)"):html.index("function bubbleOpacity")]
+    assert "hidden: hideUntouched && !tiered" in b
+    assert "physics: !(hideUntouched && !tiered)" in b
+    j = html.index("function resettle(iterations, message)")
+    assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
+
+
+def test_reset_reapplies_the_current_lens_not_the_default():
+    # Reset cleans up inside the lens the reader chose (selection, filters,
+    # hand-opened bubbles, the Untouched refinement); it never changes lens.
+    html = _render()
+    i = html.index("document.getElementById('reset').onclick")
+    body = html[i:i + 900]
+    assert "filteredTiers.clear()" in body and "filteredTypes.clear()" in body
+    assert "DEFAULT_LENS" not in body
+    assert "if (currentView !== 'list') applyLens(lens[currentView]);" in body
+
+
+def test_view_switch_applies_that_views_lens():
+    html = _render()
+    i = html.index("function setView(v)")
+    body = html[i:i + 900]
+    assert "buildLensRow();" in body
+    assert "if (v !== 'list') applyLens(lens[v]);" in body
+
+
+def test_roll_up_shows_in_every_impact_lens():
+    html = _render()
+    assert 'id="roll-wrap"' in html
+    i = html.index("function buildRoll()")
+    assert "document.getElementById('roll-wrap').hidden = currentView !== 'impact';" in html[i:i + 700]
+    j = html.index("function setView(v)")
+    assert "document.getElementById('roll-wrap').hidden = v !== 'impact';" in html[j:j + 900]
 
 
 def test_grouping_uses_native_clustering_keyed_by_repo():
@@ -293,12 +445,6 @@ def test_grouping_uses_native_clustering_keyed_by_repo():
     assert "n.repo !== 'external' && n.repo !== 'cross'" in html
 
 
-def test_grouping_default_from_threshold_and_remembered_per_atlas():
-    html = _render()
-    assert "const GROUP_KEY = 'changeatlas-group:' + DATA.nodes.length" in html
-    assert "if (grouped === null) grouped = LARGE" in html
-
-
 def test_peripheral_bubbles_not_colour_alone():
     html = _render()
     assert "borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false" in html
@@ -308,48 +454,6 @@ def test_peripheral_bubbles_not_colour_alone():
 def test_search_and_links_open_collapsed_repo_first():
     html = _render()
     assert "if (key && collapsed.has(key)) { expandRepo(key); resettle(60); }" in html
-
-
-def test_hide_untouched_toggle_truly_hides():
-    html = _render()
-    assert 'id="hide-untouched"' in html
-    assert "const gone = id => hideUntouched && stateOf(id) === 'dimmed'" in html
-    assert "hidden: gone(n.id)" in html
-    assert "hideToggle.setAttribute('aria-pressed', String(hideUntouched))" in html
-
-
-def test_hide_untouched_hides_bubbles_with_nothing_in_the_release():
-    # Regression: Hide untouched removed member nodes but left every plain
-    # bubble on the canvas, so in grouped mode it looked like a no-op.
-    html = _render()
-    assert "hidden: hideUntouched && !tiered" in html
-    i = html.index("function applyHidden()")
-    assert "restyleBubbles();" in html[i:i + 200]
-
-
-def test_hide_untouched_takes_hidden_things_out_of_physics():
-    # A hidden node still repels its neighbours unless physics is off too, so
-    # the survivors would stay spread across the whole canvas.
-    html = _render()
-    i = html.index("function applyGhostPhysics()")
-    assert "physics: !gone(n.id)" in html[i:i + 400]
-    assert "physics: edgePhysics(e)" in html[i:i + 900]
-    assert "physics: !(hideUntouched && !tiered)" in html[html.index("function bubbleStyle(key)"):html.index("function bubbleOpacity")]
-    # vis re-enables physics on whatever a cluster releases, so every
-    # structural change re-applies the ghost rule before re-settling.
-    j = html.index("function resettle(iterations)")
-    assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
-    # islands with no springs between them need an explicit pull, then a fit
-    # to what is left rather than the ghosts' old footprint
-    k = html.index("hideToggle.addEventListener('click'")
-    assert "if (hideUntouched) compactSurvivors();" in html[k:k + 300]
-    assert "fitVisibleWhenSettled();" in html[k:k + 300]
-
-
-def test_reset_clears_hide_untouched():
-    html = _render()
-    i = html.index("document.getElementById('reset').onclick")
-    assert "hideUntouched = false" in html[i:i + 900]
 
 
 def test_roll_up_tables_present_and_accessible():
@@ -374,13 +478,51 @@ def test_roll_up_row_click_focuses_repo():
     assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
 
 
+def test_untouched_legend_entry_is_a_toggle_only_on_whole_map():
+    # Whole map is the one lens that shows untouched nodes flat, so it is the
+    # one place the Untouched entry hides and shows them. On Release only they
+    # are already gone; on In context hiding them would just be Release only.
+    html = _render()
+    assert "const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole'" in html
+    j = html.index("function buildLegend()")
+    body = html[j:j + 900]
+    assert "else if (untouchedToggleable()) legendChip(IMPACT[k].color, text, hideUntouched, toggleUntouched);" in body
+    assert "else legendKey(IMPACT[k].color, text);" in body
+    i = html.index("function legendKey(color, text)")
+    assert "document.createElement('span')" in html[i:i + 300]
+    assert "el.className = 'chip key'" in html[i:i + 300]
+    assert ".chip.key{cursor:default;border-style:dashed;color:var(--muted)}" in html
+
+
+def test_legend_is_first_built_after_the_lens_state_exists():
+    # Regression: buildLegend() reads lens.impact via untouchedToggleable(); an
+    # early call before `const lens` threw a TDZ ReferenceError and killed the page.
+    html = _render()
+    first_build = html.index("\nbuildLegend();")
+    assert html.index("const lens = {") < first_build
+    assert html.index("const untouchedToggleable") < first_build
+
+
+def test_untouched_toggle_flips_hide_and_settles():
+    html = _render()
+    i = html.index("function toggleUntouched()")
+    body = html[i:i + 300]
+    assert "hideUntouched = !hideUntouched;" in body
+    assert "buildLegend();" in body
+    assert "settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');" in body
+
+
+def test_untouched_fade_filter_is_gone():
+    html = _render()
+    assert "filteredTiers.has('dimmed')" not in html
+
+
 def test_bubbles_follow_legend_filters():
     # Regression: legend pills only updated the node DataSet, so in grouped
     # mode the bubbles (the untouched mass, and the amber peripheral ones)
     # ignored Untouched/Peripheral filters and System-view type filters.
     html = _render()
     assert "c.peripheral > 0 && !filteredTiers.has('peripheral')" in html
-    assert "!periph && filteredTiers.has('dimmed')" in html
     assert "filteredTypes.has('repo')" in html
 
 

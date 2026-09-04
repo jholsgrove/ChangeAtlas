@@ -85,40 +85,81 @@ class ReportPage:
         data_url = "data:image/png;base64," + base64.b64encode(png_bytes).decode()
         return tuple(self.page.evaluate(_PIXEL_AT_ORIGIN, data_url))
 
-    # ---- grouped mode / hide untouched ----
+    # ---- lenses ----
 
     def wait_settled(self):
         """Wait for the large-graph layout overlay to clear (no-op on small graphs)."""
         self.page.wait_for_function(
             "s => document.querySelector(s).hidden", arg=S.LAYOUT_OVERLAY, timeout=60_000)
 
-    def grouping_on(self) -> bool:
-        return self.page.locator(S.GROUP_TOGGLE).get_attribute("aria-pressed") == "true"
-
-    def toggle_grouping(self):
-        self.page.click(S.GROUP_TOGGLE)
+    def switch_view(self, name: str):
+        """Click the Impact / System / List view button and wait for the layout."""
+        self.page.click(S.VIEW_BUTTON.format(name=name))
         self.wait_settled()
 
-    def toggle_hide_untouched(self):
-        self.page.click(S.HIDE_UNTOUCHED)
+    def choose_lens(self, label: str):
+        """Click a lens by its visible label (e.g. 'Release only') and wait for the layout."""
+        self.page.locator(S.LENS_BUTTON, has_text=label).first.click()
         self.wait_settled()
+
+    def active_lens(self) -> str:
+        return self.page.locator(S.LENS_BUTTON + '[aria-pressed="true"]').first.inner_text()
+
+    def lens_row_visible(self) -> bool:
+        return self.page.locator(S.LENS_ROW).is_visible()
+
+    def lens_row_removed_from_flow(self) -> bool:
+        """The row carries the `hidden` attribute (out of the DOM flow and tab order), not just display:none."""
+        return self.page.evaluate("s => document.querySelector(s).hidden", S.LENS_ROW)
+
+    def lens_note(self) -> str:
+        """The status sentence pinned to the map after a lens change (also the live region)."""
+        self.page.wait_for_function(
+            "s => document.querySelector(s).textContent !== ''", arg=S.LENS_NOTE)
+        return self.page.locator(S.LENS_NOTE).inner_text()
+
+    def lens_note_visible(self) -> bool:
+        return self.page.locator(S.LENS_NOTE).is_visible()
+
+    def lens_caption(self) -> str:
+        return self.page.locator(S.LENS_CAPTION).inner_text()
+
+    def lens_caption_visible(self) -> bool:
+        return self.page.locator(S.LENS_CAPTION).is_visible()
+
+    def lens_tooltip(self, label: str) -> str:
+        return self.page.locator(S.LENS_BUTTON, has_text=label).first.get_attribute("title") or ""
+
+    def untouched_count(self) -> int:
+        return self.page.evaluate("counts.dimmed")
+
+    def bubble_member_count(self) -> int:
+        """Components inside the bubbles currently on the canvas."""
+        return self.page.evaluate(
+            "[...collapsed].reduce((n, k) => n + (membersOf[k] || []).length, 0)")
+
+    def roll_up_visible(self) -> bool:
+        return self.page.locator(S.ROLL_WRAP).is_visible()
+
+    def repo_count(self) -> int:
+        return self.page.evaluate("Object.keys(membersOf).length")
+
+    def amber_bubble_count(self) -> int:
+        """Bubbles drawn with the peripheral tier's thicker dashed ring."""
+        return self.page.evaluate(
+            "network.body.nodeIndices.filter(id => network.isCluster(id)"
+            " && network.body.nodes[id].options.borderWidth === 2).length")
 
     def total_node_count(self) -> int:
         return self.page.evaluate("DATA.nodes.length")
 
     def visible_node_count(self) -> int:
         """Nodes vis is actually drawing: not inside a bubble, not hidden."""
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => !network.body.nodes[id].options.hidden).length")
+        return self.page.evaluate("network.body.nodeIndices.length")
 
     def bubble_count(self) -> int:
         return self.page.evaluate(
             "network.body.nodeIndices.filter(id => network.isCluster(id)).length")
-
-    def visible_bubble_count(self) -> int:
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => network.isCluster(id)"
-            " && !network.body.nodes[id].options.hidden).length")
 
     def click_first_bubble(self):
         x, y = self.page.evaluate("""() => {
@@ -130,18 +171,79 @@ class ReportPage:
         self.page.mouse.click(x, y)
         self.wait_settled()
 
+    # ---- selection and hover spotlight ----
+
+    def _dom_point_of(self, node_id: str) -> tuple:
+        return tuple(self.page.evaluate("""id => {
+          const d = network.canvasToDOM(network.getPositions([id])[id]);
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          return [r.left + d.x, r.top + d.y];
+        }""", node_id))
+
+    def unconnected_node_pair(self) -> tuple:
+        """Two visible nodes with no edge between them (so one's spotlight excludes the other)."""
+        return tuple(self.page.evaluate("""() => {
+          const ids = network.body.nodeIndices.filter(i => !network.isCluster(i));
+          for (const a of ids) {
+            const near = new Set(network.getConnectedNodes(a));
+            const b = ids.find(o => o !== a && !near.has(o));
+            if (b) return [a, b];
+          }
+          return null;
+        }"""))
+
+    def click_node(self, node_id: str):
+        x, y = self._dom_point_of(node_id)
+        self.page.mouse.click(x, y)
+
+    def hover_node(self, node_id: str):
+        x, y = self._dom_point_of(node_id)
+        self.page.mouse.move(x, y)
+        self.page.wait_for_function(
+            "id => network.body.nodes[id].hover === true", arg=node_id)
+
+    def move_mouse_off_nodes(self):
+        """Move the pointer to an empty spot on the canvas, so vis fires blurNode."""
+        x, y = self.page.evaluate("""() => {
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          const pts = network.body.nodeIndices.map(i => network.canvasToDOM(network.getPositions([i])[i]));
+          for (let y = 10; y < r.height; y += 15) for (let x = 10; x < r.width; x += 15) {
+            if (pts.every(p => Math.hypot(p.x - x, p.y - y) > 60)) return [r.left + x, r.top + y];
+          }
+          return [r.left + 5, r.top + 5];
+        }""")
+        self.page.mouse.move(x, y)
+        self.page.wait_for_function(
+            "() => Object.values(network.body.nodes).every(n => n.hover !== true)")
+
+    def node_opacity(self, node_id: str) -> float:
+        return self.page.evaluate("id => network.body.nodes[id].options.opacity", node_id)
+
+    def selected_id(self):
+        return self.page.evaluate("selected")
+
+    def view_tooltip(self, name: str) -> str:
+        return self.page.locator(S.VIEW_BUTTON.format(name=name)).get_attribute("title") or ""
+
+    def reset_view(self):
+        self.page.click(S.RESET)
+        self.wait_settled()
+
     def toggle_legend_chip(self, label: str):
         self.page.locator("#legend .chip", has_text=label).first.click()
 
-    def bubble_opacities(self) -> list:
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => network.isCluster(id))"
-            ".map(id => network.body.nodes[id].options.opacity)")
+    def legend_entry_is_button(self, label: str) -> bool:
+        """A clickable chip is a <button>; a key is a <span>."""
+        return self.page.locator("#legend .chip", has_text=label).first.evaluate(
+            "el => el.tagName === 'BUTTON'")
+
+    def tiered_node_count(self) -> int:
+        """Nodes with any release tier (everything that is not untouched)."""
+        return self.page.evaluate("DATA.nodes.filter(n => stateOf(n.id) !== 'dimmed').length")
 
     def visible_ids(self) -> list:
         """Ids of everything vis is drawing at top level: nodes and bubbles, not hidden."""
-        return self.page.evaluate(
-            "network.body.nodeIndices.filter(id => !network.body.nodes[id].options.hidden)")
+        return self.page.evaluate("network.body.nodeIndices")
 
     def bounds_area(self, ids: list) -> float:
         """Area (canvas units²) of the bounding box round the given node/bubble ids."""
@@ -155,7 +257,7 @@ class ReportPage:
         """Hidden nodes/bubbles still in the simulation, plus live springs to them."""
         return self.page.evaluate("""() => {
           const hidden = id => network.body.nodes[id].options.hidden;
-          const ghostNodes = network.body.nodeIndices.filter(id => hidden(id) && network.body.nodes[id].options.physics);
+          const ghostNodes = Object.values(network.body.nodes).filter(n => n.options.hidden && n.options.physics);
           const ghostEdges = Object.values(network.body.edges).filter(e => e.options.physics && e.connected
             && network.body.nodes[e.fromId] && network.body.nodes[e.toId] && (hidden(e.fromId) || hidden(e.toId)));
           return ghostNodes.length + ghostEdges.length;

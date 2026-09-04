@@ -11,3 +11,6 @@ graph-data.json
 config/component-globs.json
 # ...but the bundled fictional samples are public by design.
 !sample/**/graph-data.json
+
+# brainstorming companion mockups (local only)
+.superpowers/brainstorm/

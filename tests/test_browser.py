@@ -8,8 +8,13 @@ runtime that static checks can't see. Currently two:
     only listens for *window* resize, so a missed setSize/redraw leaves a
     stale canvas that no static test would catch),
   * Export PNG really produces an opaque, canvas-sized image, and
-  * grouped mode on the 100-repo sample: bubbles exist, open on click, and
-    Hide untouched / the grouping toggle change what vis actually draws.
+  * lenses on the 100-repo sample: the default lens per view, Release only
+    hiding and packing, a re-click closing hand-opened bubbles, and the
+    lens row leaving the tab order in List view,
+  * the hover spotlight yields back to the selected node once the pointer
+    leaves (hoverNode/blurNode are vis canvas events),
+  * the lens caption and the canvas note say what the active lens did, with
+    counts taken from the clustered/hidden state vis actually holds.
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -118,18 +123,34 @@ def test_export_png_downloads_opaque_image_of_the_canvas(report):
     assert (r, g, b) == _hex_to_rgb(report.theme_background())
 
 
-def test_small_report_opens_flat(report):
-    assert not report.grouping_on()
+def test_small_report_opens_on_whole_map(report):
+    assert report.active_lens() == "Whole map"
     assert report.bubble_count() == 0
 
 
-def test_large_report_opens_grouped_and_readable(large_report):
+def test_large_report_opens_in_context_and_readable(large_report):
     total = large_report.total_node_count()
     assert total > 150
-    assert large_report.grouping_on()
+    assert large_report.active_lens() == "In context"
     bubbles = large_report.bubble_count()
     assert 80 <= bubbles <= 100, bubbles          # 100 repos, 6 with evidence stay open
     assert large_report.visible_node_count() < total / 4
+
+
+def test_system_view_opens_on_repos_with_every_repo_a_bubble(large_report):
+    large_report.switch_view("system")
+    assert large_report.active_lens() == "Repos"
+    assert large_report.bubble_count() == large_report.repo_count()
+    large_report.choose_lens("Components")
+    assert large_report.bubble_count() == 0
+
+
+def test_each_view_remembers_its_own_lens(large_report):
+    large_report.choose_lens("Release only")
+    large_report.switch_view("system")
+    assert large_report.active_lens() == "Repos"
+    large_report.switch_view("impact")
+    assert large_report.active_lens() == "Release only"
 
 
 def test_clicking_a_bubble_opens_that_repo(large_report):
@@ -139,50 +160,170 @@ def test_clicking_a_bubble_opens_that_repo(large_report):
     assert large_report.visible_node_count() > before_nodes
 
 
-def test_hide_untouched_removes_nodes_and_plain_bubbles(large_report):
-    before_nodes, before_bubbles = large_report.visible_node_count(), large_report.visible_bubble_count()
-    large_report.toggle_hide_untouched()
-    assert large_report.visible_node_count() < before_nodes
+def test_reclicking_the_active_lens_closes_hand_opened_bubbles(large_report):
+    before = large_report.bubble_count()
+    large_report.click_first_bubble()
+    assert large_report.bubble_count() == before - 1
+    large_report.choose_lens("In context")
+    assert large_report.bubble_count() == before
+
+
+def test_release_only_hides_untouched_and_packs_the_survivors(large_report):
+    total_nodes, before_bubbles = large_report.visible_node_count(), large_report.bubble_count()
+    large_report.choose_lens("Release only")
+    assert large_report.visible_node_count() < total_nodes
     # every bubble with nothing in the release goes; peripheral bubbles stay
-    assert 0 < large_report.visible_bubble_count() < before_bubbles / 4
-    large_report.toggle_hide_untouched()
-    assert large_report.visible_bubble_count() == before_bubbles
-
-
-def test_hide_untouched_pulls_the_survivors_together(large_report):
-    # Hidden nodes must leave the physics simulation too; otherwise they keep
-    # repelling the survivors, which stay pinned at the corners of the full map
-    # with nothing but whitespace between them.
-    large_report.toggle_hide_untouched()
+    assert 0 < large_report.bubble_count() < before_bubbles / 4
     survivors = large_report.visible_ids()
     compact = large_report.bounds_area(survivors)
-    large_report.toggle_hide_untouched()          # untouched back in: the map spreads out again
-    spread = large_report.bounds_area(survivors)
-    assert compact < spread / 2
+    large_report.choose_lens("In context")          # untouched back in: the map spreads out again
+    assert large_report.bubble_count() == before_bubbles
+    assert compact < large_report.bounds_area(survivors) / 2
 
 
-def test_opening_a_bubble_while_hidden_leaves_no_ghosts_in_physics(large_report):
+def test_opening_a_bubble_on_release_only_leaves_no_ghosts_in_physics(large_report):
     # vis turns physics back on for everything a cluster releases, which would
-    # quietly re-introduce ghosts after any bubble opens with Hide untouched on.
-    large_report.toggle_hide_untouched()
+    # quietly re-introduce ghosts after any bubble opens while hiding.
+    large_report.choose_lens("Release only")
     assert large_report.ghosts_in_physics() == 0
     large_report.click_first_bubble()
     assert large_report.ghosts_in_physics() == 0
 
 
-def test_grouping_toggle_off_shows_every_node(large_report):
+def test_whole_map_shows_every_node(large_report):
     total = large_report.total_node_count()
-    large_report.toggle_grouping()
-    assert not large_report.grouping_on()
+    large_report.choose_lens("Whole map")
     assert large_report.bubble_count() == 0
     assert large_report.visible_node_count() == total
 
 
-def test_untouched_pill_fades_bubbles_in_grouped_mode(large_report):
-    assert set(large_report.bubble_opacities()) == {1}
-    large_report.toggle_legend_chip("Untouched")
-    ops = large_report.bubble_opacities()
-    # plain bubbles fade like filtered untouched nodes; peripheral bubbles stay lit
-    assert ops.count(0.12) > ops.count(1) > 0
-    large_report.toggle_legend_chip("Untouched")
-    assert set(large_report.bubble_opacities()) == {1}
+def test_lens_row_is_gone_in_list_view(large_report):
+    assert large_report.lens_row_visible()
+    large_report.switch_view("list")
+    assert not large_report.lens_row_visible()
+    assert large_report.lens_row_removed_from_flow()
+
+
+def test_roll_up_table_is_gone_in_list_and_system_views(large_report):
+    assert large_report.roll_up_visible()
+    large_report.switch_view("list")
+    assert not large_report.roll_up_visible()
+    large_report.switch_view("system")
+    assert not large_report.roll_up_visible()
+    large_report.switch_view("impact")
+    assert large_report.roll_up_visible()
+
+
+def test_lens_note_reports_what_release_only_did(report):
+    total, tiered = report.total_node_count(), report.tiered_node_count()
+    report.choose_lens("Release only")
+    assert report.lens_note() == (
+        f"Release only. {tiered} components in this release shown, {total - tiered} untouched hidden.")
+    assert report.lens_note_visible()
+
+
+def test_lens_note_reports_whole_map_and_the_untouched_toggle(report):
+    total, untouched = report.total_node_count(), report.untouched_count()
+    assert report.lens_note() == f"Whole map. All {total} components, {untouched} untouched faded."
+    report.toggle_legend_chip("Untouched")
+    assert report.lens_note() == (
+        f"Whole map. {total - untouched} components shown, {untouched} untouched hidden.")
+    report.toggle_legend_chip("Untouched")
+    assert report.lens_note() == f"Whole map. All {total} components, {untouched} untouched faded."
+
+
+def test_lens_note_counts_the_bubbles_in_context(large_report):
+    bubbles, inside = large_report.bubble_count(), large_report.bubble_member_count()
+    assert large_report.lens_note() == (
+        f"In context. {bubbles} repos with nothing in this release collapsed into bubbles, "
+        f"{inside} components inside.")
+    large_report.switch_view("system")
+    assert large_report.lens_note() == (
+        f"Repos. {large_report.repo_count()} repos as bubbles. Click one to open it.")
+
+
+def test_lens_note_is_gone_in_list_view(report):
+    assert report.lens_note_visible()
+    report.switch_view("list")
+    assert not report.lens_note_visible()
+
+
+def test_lens_caption_follows_the_active_lens_and_matches_the_tooltips(report):
+    assert report.lens_caption() == report.lens_tooltip("Whole map")
+    whole = report.lens_caption()
+    report.choose_lens("Release only")
+    assert report.lens_caption() == report.lens_tooltip("Release only") != whole
+    assert "hidden" in report.lens_caption()
+    report.switch_view("list")
+    assert not report.lens_caption_visible()
+
+
+def test_whole_map_untouched_chip_hides_and_shows_untouched(report):
+    # The small sample opens on Whole map, the one lens where the Untouched
+    # entry is a toggle. Hiding removes the nodes (and packs the rest); the
+    # lens indicator does not move.
+    total, tiered = report.total_node_count(), report.tiered_node_count()
+    assert report.legend_entry_is_button("Untouched")
+    report.toggle_legend_chip("Untouched")
+    assert report.visible_node_count() == tiered
+    assert report.active_lens() == "Whole map"
+    report.toggle_legend_chip("Untouched")
+    assert report.visible_node_count() == total
+
+
+def test_untouched_chip_is_a_key_outside_whole_map(large_report):
+    assert large_report.active_lens() == "In context"
+    assert not large_report.legend_entry_is_button("Untouched")
+    large_report.choose_lens("Whole map")
+    assert large_report.legend_entry_is_button("Untouched")
+    large_report.choose_lens("Release only")
+    assert not large_report.legend_entry_is_button("Untouched")
+
+
+def test_peripheral_pill_turns_amber_bubbles_plain(large_report):
+    assert large_report.amber_bubble_count() > 0
+    large_report.toggle_legend_chip("Peripheral")
+    assert large_report.amber_bubble_count() == 0
+    large_report.toggle_legend_chip("Peripheral")
+    assert large_report.amber_bubble_count() > 0
+
+
+def test_hover_spotlight_yields_back_to_the_selected_node(report):
+    # Click a node, hover a node it is not connected to, move away: the
+    # selection must be lit again and the hovered node must recede.
+    report.switch_view("system")
+    a, b = report.unconnected_node_pair()
+    report.click_node(a)
+    assert report.selected_id() == a
+    assert report.node_opacity(a) == 1
+    report.hover_node(b)
+    assert report.node_opacity(b) == 1          # hover spotlight while pointing
+    report.move_mouse_off_nodes()
+    assert report.node_opacity(a) == 1, "selected node went dark after hovering elsewhere"
+    assert report.node_opacity(b) < 1, "hovered node stayed lit after the pointer left"
+
+
+def test_reset_keeps_the_chosen_lens_and_closes_hand_opened_bubbles(report):
+    # Small map: the System default is Components, so a Reset that fell back
+    # to the default would silently leave the Repos lens the reader chose.
+    report.switch_view("system")
+    report.choose_lens("Repos")
+    repos = report.repo_count()
+    assert report.bubble_count() == repos
+    report.click_first_bubble()
+    assert report.bubble_count() == repos - 1
+    report.reset_view()
+    assert report.active_lens() == "Repos"
+    assert report.bubble_count() == repos
+
+
+def test_view_buttons_keep_their_tooltips_expanded_and_collapsed(report):
+    # The collapsed rail rewrites these titles (one-letter buttons need the
+    # name); the expanded panel must still explain what each view shows.
+    expanded = {n: report.view_tooltip(n) for n in ("impact", "system", "list")}
+    assert all(len(t) > 20 for t in expanded.values()), expanded
+    report.toggle_side_panel()
+    assert report.view_tooltip("impact").startswith("Impact")
+    assert expanded["impact"] in report.view_tooltip("impact")
+    report.toggle_side_panel()
+    assert report.view_tooltip("impact") == expanded["impact"]

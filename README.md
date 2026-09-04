@@ -20,11 +20,11 @@ every push.
 
 **[Large-system demo →](https://jholsgrove.github.io/ChangeAtlas/large/)** — the
 same report on a fictional 100-repo retail platform (~1,500 components).
-Above 150 components the report opens **grouped by repo**: repos with no
-production or test evidence collapse into bubbles, a per-repo roll-up sits
-in the side panel, and **Hide untouched** strips the map down to the
-release. Toggle grouping off to see why the flat map stops working at this
-scale. See **Large systems**, below.
+Above 150 components the report opens on the **In context** lens: repos
+with no production or test evidence collapse into bubbles and a per-repo
+roll-up sits in the side panel. **Release only** strips the map down to the
+release and pulls what is left together; **Whole map** shows why the flat
+map stops working at this scale. See **Large systems**, below.
 
 <!--
   To regenerate docs/img/sample-map.png: run `python -m changeatlas --sample`,
@@ -48,7 +48,7 @@ Then open `out/impact-sample.html` in a browser. This renders the bundled
 fictional web-shop sample (`sample/`) end to end, with zero ADO access.
 `--sample large` renders the 100-repo sample (`sample/large/`) to
 `out/impact-sample-large.html`; `--group-threshold N` (default 150) sets the
-component count above which any report opens grouped by repo.
+component count above which a report opens on the In context lens (repos as bubbles) instead of Whole map.
 
 ## Quickstart (Azure DevOps)
 
@@ -187,21 +187,36 @@ tighter matching.
 ## Large systems
 
 Readability depends on how many *untouched* nodes are drawn, not on the
-size of the atlas. Above `--group-threshold` components (default 150) the
-report opens grouped by repo: every repo with no changed, touched or
-test-only component is one bubble labelled with its name and component
-count (an amber dashed ring means it contains a peripheral neighbour, and
-the label says how many). Click a bubble to open it; click the repo node
-inside an open group to close it. **Hide untouched** removes untouched
-nodes from the layout altogether, including the bubbles of repos with
-nothing in the release, and pulls what is left together so the survivors
-fill the viewport instead of sitting at the far corners of the full map
-(toggle it off and the map spreads out again, settling near, not exactly
-on, its old positions). Both are toggles in the side panel, work
-on any report, and never change the tier counts, the List view or the
-exports — the Obsidian vault is always the full atlas, and Export PNG is
-whatever is on screen. The grouping choice is remembered per browser, per
-atlas size.
+size of the atlas, so the side panel offers a row of **lenses** under the
+view switch. A caption under the row (and a tooltip on each button) says
+what the lens does, and a note pinned to the map says what it just did to
+this system, with counts: how many components are hidden, how many repos
+collapsed into bubbles and how many components sit inside them. In Impact
+view:
+
+- **Release only** — untouched nodes are gone, and so is every repo with
+  nothing in the release. What is left is pulled together so the survivors
+  fill the viewport instead of sitting at the far corners of the full map.
+  Repos that contribute only peripheral neighbours stay as amber bubbles.
+- **In context** — release components flat; every repo with no changed,
+  touched or test-only component is one bubble labelled with its name and
+  component count (an amber dashed ring means it contains a peripheral
+  neighbour, and the label says how many).
+- **Whole map** — everything flat, untouched faded. Here the Untouched
+  chip in the legend is a toggle: click it to hide the untouched nodes (the
+  rest pull together) and again to bring them back.
+
+In System view the lenses are **Repos** (every repo a bubble) and
+**Components** (flat). Above `--group-threshold` components (default 150) a
+report opens on In context / Repos; below it, Whole map / Components.
+Nothing is remembered between opens.
+
+Click a bubble to open it; click the repo node inside an open group to
+close it. Clicking the current lens again re-applies it cleanly, closing
+anything you opened by hand. Leaving Release only lets the map spread out
+again, settling near, not exactly on, its old positions. Lenses never
+change the tier counts, the List view or the exports — the Obsidian vault
+is always the full atlas, and Export PNG is whatever is on screen.
 
 ## Anonymised demos
 
