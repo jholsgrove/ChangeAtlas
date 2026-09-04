@@ -70,6 +70,15 @@ def test_sidebar_logo_is_cropped_to_the_globe(tmp_path):
         assert "<metadata>" not in svg
 
 
+def test_favicon_is_the_globe_and_follows_the_theme(tmp_path):
+    vis = tmp_path / "vis.js"
+    vis.write_text("", encoding="utf-8")
+    html = render.render(payload(), TEMPLATE, vis)
+    assert '<link id="favicon" rel="icon" type="image/svg+xml"' in html
+    # Swapped with the sidebar logo, so it is set from the same constants.
+    assert "getElementById('favicon').href = t === 'light' ? LOGO_LIGHT : LOGO_DARK" in html
+
+
 def test_logo_svgs_have_no_provenance_blob_or_background():
     for theme in ("light", "dark"):
         svg = (TEMPLATE.parent / f"logo-{theme}.svg").read_text(encoding="utf-8")
