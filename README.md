@@ -1,8 +1,11 @@
-# ChangeAtlas
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="changeatlas/logo-dark.svg">
+    <img src="changeatlas/logo-light.svg" alt="ChangeAtlas" width="320">
+  </picture>
+</p>
 
 [![CI](https://github.com/jholsgrove/ChangeAtlas/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jholsgrove/ChangeAtlas/actions/workflows/ci.yml)
-
-![Sample impact map](docs/img/ChangeAtlas-Logo.png)
 
 ChangeAtlas turns a release's tracker query into a shaded map of your
 software system. An AI agent builds the atlas of your system **once** — a

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>/*__TITLE__*/</title>
+<link id="favicon" rel="icon" type="image/svg+xml" href="">
 <style>
 :root{--bg:#0f1419;--panel:#161c22;--line:#232a31;--fg:#d7dde3;--muted:#8a949e;--accent:#4a9eea;--badge-text:#0b0e11;}
 *{box-sizing:border-box}
@@ -20,7 +21,7 @@ letter-spacing:.02em}
 h1 small{color:var(--muted);font-weight:400;font-size:12px;display:block;margin-top:2px}
 .brand{display:flex;align-items:flex-start;gap:10px}
 .brand > div{flex:1;min-width:0}
-#logo{width:36px;height:36px;border-radius:8px;flex:0 0 36px}
+#logo{width:36px;height:36px;border-radius:50%;flex:0 0 36px}
 #theme-toggle,#side-toggle{background:var(--bg);color:var(--fg);border:1px solid var(--line);
 border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;flex:0 0 auto}
 #theme-toggle:hover,#side-toggle:hover{border-color:var(--accent)}
@@ -1147,6 +1148,7 @@ function applyTheme(t) {
   rootStyle.setProperty('--accent', PALETTE.link);
   rootStyle.setProperty('--badge-text', PALETTE.badge_text);
   document.getElementById('logo').src = t === 'light' ? LOGO_LIGHT : LOGO_DARK;
+  document.getElementById('favicon').href = t === 'light' ? LOGO_LIGHT : LOGO_DARK;
   const btn = document.getElementById('theme-toggle');
   btn.setAttribute('aria-pressed', String(t === 'light'));
   btn.textContent = t === 'light' ? '🌙' : '☀️';
@@ -1165,7 +1167,7 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* storage blocked */ }
   applyTheme(next);
 });
-applyTheme(theme); // initial paint: CSS vars, logo, toggle state
+applyTheme(theme); // initial paint: CSS vars, logo, favicon, toggle state
 applyGrouping();   // initial: collapse per rule before the first layout settles
 </script>
 </body>
