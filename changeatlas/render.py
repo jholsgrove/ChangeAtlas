@@ -5,9 +5,16 @@ from pathlib import Path
 
 from . import palette
 
+# logo-{light,dark}.svg are the full lockup (globe + wordmark) on a
+# 1254x1254 canvas; the sidebar shows a 36px icon, so the render crops the
+# viewBox to the globe (centre 631,506, radius 321 + 12px stroke).
+GLOBE_VIEWBOX = "296 171 670 670"
+
 
 def _logo_data_uri(path: Path) -> str:
-    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+    svg = path.read_text(encoding="utf-8").replace('viewBox="0 0 1254 1254"',
+                                                    f'viewBox="{GLOBE_VIEWBOX}"', 1)
+    return "data:image/svg+xml;base64," + base64.b64encode(svg.encode("utf-8")).decode("ascii")
 
 
 def render(payload: dict, template_path, vis_path) -> str:
@@ -22,5 +29,5 @@ def render(payload: dict, template_path, vis_path) -> str:
             .replace("/*__VISLIB__*/", vislib)
             .replace("/*__DATA__*/", data)
             .replace("/*__PALETTES__*/", json.dumps(palette.THEMES))
-            .replace("/*__LOGO_LIGHT__*/", _logo_data_uri(template_path.parent / "logo-light.png"))
-            .replace("/*__LOGO_DARK__*/", _logo_data_uri(template_path.parent / "logo-dark.png")))
+            .replace("/*__LOGO_LIGHT__*/", _logo_data_uri(template_path.parent / "logo-light.svg"))
+            .replace("/*__LOGO_DARK__*/", _logo_data_uri(template_path.parent / "logo-dark.svg")))

@@ -46,11 +46,45 @@ def test_render_embeds_both_theme_palettes(tmp_path):
     assert "#c0392b" in html   # light changed fill
 
 
-def test_render_embeds_logos_as_data_uris(tmp_path):
+def test_render_embeds_logos_as_svg_data_uris(tmp_path):
     vis = tmp_path / "vis.js"
     vis.write_text("", encoding="utf-8")
     html = render.render(payload(), TEMPLATE, vis)
-    assert html.count("data:image/png;base64,") >= 2  # light + dark logo
+    assert html.count("data:image/svg+xml;base64,") == 2  # light + dark logo
+    assert "data:image/png" not in html
+
+
+def test_sidebar_logo_is_cropped_to_the_globe(tmp_path):
+    # The 36px sidebar icon shows only the globe: the wordmark is illegible at
+    # that size and the title text beside it already names the tool.
+    import base64
+    vis = tmp_path / "vis.js"
+    vis.write_text("", encoding="utf-8")
+    html = render.render(payload(), TEMPLATE, vis)
+    blobs = re.findall(r"data:image/svg\+xml;base64,([A-Za-z0-9+/=]+)", html)
+    assert len(blobs) == 2
+    for blob in blobs:
+        svg = base64.b64decode(blob).decode("utf-8")
+        assert f'viewBox="{render.GLOBE_VIEWBOX}"' in svg
+        assert 'viewBox="0 0 1254 1254"' not in svg
+        assert "<metadata>" not in svg
+
+
+def test_favicon_is_the_globe_and_follows_the_theme(tmp_path):
+    vis = tmp_path / "vis.js"
+    vis.write_text("", encoding="utf-8")
+    html = render.render(payload(), TEMPLATE, vis)
+    assert '<link id="favicon" rel="icon" type="image/svg+xml"' in html
+    # Swapped with the sidebar logo, so it is set from the same constants.
+    assert "getElementById('favicon').href = t === 'light' ? LOGO_LIGHT : LOGO_DARK" in html
+
+
+def test_logo_svgs_have_no_provenance_blob_or_background():
+    for theme in ("light", "dark"):
+        svg = (TEMPLATE.parent / f"logo-{theme}.svg").read_text(encoding="utf-8")
+        assert "<metadata>" not in svg and "c2pa" not in svg
+        assert 'width="1254" height="1254"' not in svg   # no full-bleed square
+        assert 'viewBox="0 0 1254 1254"' in svg
 
 
 def test_footer_links_to_github(tmp_path):
