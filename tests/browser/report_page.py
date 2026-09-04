@@ -207,7 +207,18 @@ class ReportPage:
         self.page.mouse.click(x, y)
 
     def hover_node(self, node_id: str):
+        # A dot on the settled 100-repo map is ~3 px across on screen, and vis
+        # only hit-tests on a mousemove against the last drawn frame, so a
+        # single move at that size misses now and then on a slow CI runner.
+        # Centre the node at 1:1 or better, let a frame paint, approach in two
+        # moves.
+        self.page.evaluate("""id => {
+          const pos = network.getPositions([id])[id];
+          network.moveTo({ position: pos, scale: Math.max(network.getScale(), 1) });
+        }""", node_id)
+        self.page.evaluate("() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))")
         x, y = self._dom_point_of(node_id)
+        self.page.mouse.move(x + 40, y + 40)
         self.page.mouse.move(x, y)
         self.page.wait_for_function(
             "id => network.body.nodes[id].hover === true", arg=node_id)
