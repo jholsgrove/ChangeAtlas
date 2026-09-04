@@ -253,6 +253,45 @@ class ReportPage:
           return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys));
         }""", ids)
 
+    def children_in_physics(self) -> int:
+        """Nodes inside a bubble that vis is still simulating (they should all be frozen)."""
+        return self.page.evaluate(
+            "Object.values(network.body.nodes).filter(n => n.options.physics"
+            " && network.clustering.clusteredNodes[n.id]).length")
+
+    # ---- responsiveness ----
+
+    def start_measuring(self):
+        """Count full graph re-indexes and main-thread blocking until stop_measuring().
+
+        vis-network rebuilds edge, cluster, physics and index state on every
+        `_dataChanged`; one rebuild is ~20 ms on the 1,500-node sample, so an
+        action that emits once per bubble blocks the page for seconds.
+        """
+        self.page.evaluate("""() => {
+          const em = network.body.emitter, orig = em.emit;
+          window.__perf = { rebuilds: 0, blockedMs: 0, orig };
+          em.emit = function (name) {
+            if (name === '_dataChanged') window.__perf.rebuilds++;
+            return orig.apply(this, arguments);
+          };
+          window.__perf.obs = new PerformanceObserver(list =>
+            list.getEntries().forEach(e => { window.__perf.blockedMs += e.duration; }));
+          window.__perf.obs.observe({ type: 'longtask' });
+        }""")
+
+    def stop_measuring(self) -> dict:
+        """{'rebuilds': int, 'blockedMs': float} since start_measuring()."""
+        self.page.wait_for_timeout(150)   # long-task entries are delivered asynchronously
+        return self.page.evaluate("""() => {
+          const p = window.__perf;
+          p.obs.takeRecords().forEach(e => { p.blockedMs += e.duration; });
+          p.obs.disconnect();
+          network.body.emitter.emit = p.orig;
+          delete window.__perf;
+          return { rebuilds: p.rebuilds, blockedMs: Math.round(p.blockedMs) };
+        }""")
+
     def ghosts_in_physics(self) -> int:
         """Hidden nodes/bubbles still in the simulation, plus live springs to them."""
         return self.page.evaluate("""() => {

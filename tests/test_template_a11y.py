@@ -440,7 +440,10 @@ def test_grouping_uses_native_clustering_keyed_by_repo():
     html = _render()
     assert "network.cluster({" in html
     assert "joinCondition: o => o.repoKey === key" in html
-    assert "network.openCluster('cl:' + key)" in html
+    # Batched: neither call re-indexes the graph by itself (refreshData=false);
+    # the caller re-indexes once per batch.
+    assert "network.openCluster('cl:' + key, undefined, false)" in html
+    assert "  }, false);\n  collapsed.add(key);" in html
     # externals and cross-repo messaging never collapse
     assert "n.repo !== 'external' && n.repo !== 'cross'" in html
 
@@ -530,5 +533,6 @@ def test_spotlight_includes_bubbles():
     html = _render()
     i = html.index("function spotlight(keep)")
     j = html.index("function clearSpotlight()")
-    assert "updateClusteredNode(id, { opacity: keep.has(id) ? 1 : 0.12 })" in html[i:j]
-    assert "updateClusteredNode(id, { opacity: bubbleOpacity(key) })" in html[j:j + 600]
+    spot = html[i:j]
+    assert "setBubble(key, { opacity: keep.has('cl:' + key) ? 1 : 0.12 })" in spot
+    assert "setBubble(key, { opacity: bubbleOpacity(key) })" in html[j:j + 600]

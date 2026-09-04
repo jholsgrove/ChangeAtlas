@@ -436,17 +436,14 @@ function neighbours(id) {
 function spotlight(keep) {
   visNodes.update(DATA.nodes.map(n =>
     ({ id: n.id, opacity: keep.has(n.id) ? 1 : 0.12 })));
-  collapsed.forEach(key => {           // bubbles recede too, unless connected
-    const id = 'cl:' + key;
-    if (network.isCluster(id)) network.updateClusteredNode(id, { opacity: keep.has(id) ? 1 : 0.12 });
-  });
+  collapsed.forEach(key =>             // bubbles recede too, unless connected
+    setBubble(key, { opacity: keep.has('cl:' + key) ? 1 : 0.12 }));
+  network.body.emitter.emit('_requestRedraw');
 }
 function clearSpotlight() {
   visNodes.update(DATA.nodes.map(n => ({ id: n.id, opacity: baseOpacity(n.id) })));
-  collapsed.forEach(key => {
-    const id = 'cl:' + key;
-    if (network.isCluster(id)) network.updateClusteredNode(id, { opacity: bubbleOpacity(key) });
-  });
+  collapsed.forEach(key => setBubble(key, { opacity: bubbleOpacity(key) }));
+  network.body.emitter.emit('_requestRedraw');
 }
 network.on('hoverNode', p => spotlight(neighbours(p.node)));
 // Leaving a node hands the spotlight back to the open selection, if any;
@@ -659,7 +656,18 @@ function bubbleStyle(key) {
   };
 }
 function bubbleOpacity(key) { return bubbleStyle(key).opacity; }
-function collapseRepo(key) {
+// vis re-indexes the whole graph (edges, clusters, physics, value range) on
+// every '_dataChanged', ~20 ms on a 1,500-node map, and cluster(),
+// openCluster() and updateClusteredNode() each emit one. With ~100 bubbles
+// that is seconds of blocked page per hover or lens change, so bubble work
+// here is batched: mutate with refreshData=false (or setOptions, which is
+// all updateClusteredNode does before emitting), then re-index once.
+const refreshGraph = () => network.body.emitter.emit('_dataChanged');
+function setBubble(key, opts) {
+  const node = network.body.nodes['cl:' + key];
+  if (node && node.isCluster) node.setOptions(opts);
+}
+function collapseRepo(key, refresh = true) {
   if (!membersOf[key] || collapsed.has(key)) return;
   network.cluster({
     joinCondition: o => o.repoKey === key,
@@ -669,11 +677,15 @@ function collapseRepo(key) {
     }, bubbleStyle(key)),
     clusterEdgeProperties: { color: { color: PALETTE.edge_dim, opacity: 0.45 },
                              arrows: { to: { enabled: false } }, width: 1 },
-  });
+  }, false);
   collapsed.add(key);
+  if (refresh) refreshGraph();
 }
-function expandRepo(key) {
-  if (network.isCluster('cl:' + key)) network.openCluster('cl:' + key);
+function expandRepo(key, refresh = true) {
+  if (network.isCluster('cl:' + key)) {
+    network.openCluster('cl:' + key, undefined, false);
+    if (refresh) refreshGraph();
+  }
   collapsed.delete(key);
 }
 // Bring the canvas in line with the current lens's rule, discarding any
@@ -686,14 +698,16 @@ function applyGrouping() {
       if (L.rule === 'all' || !hasEvidence(k)) want.add(k);
     });
   }
-  [...collapsed].filter(k => !want.has(k)).forEach(expandRepo);
-  want.forEach(collapseRepo);
+  const open = [...collapsed].filter(k => !want.has(k));
+  const close = [...want].filter(k => !collapsed.has(k));
+  open.forEach(k => expandRepo(k, false));
+  close.forEach(k => collapseRepo(k, false));
+  if (open.length || close.length) refreshGraph();
   buildRoll();
 }
 function restyleBubbles() {   // theme or filter change: recolour without re-clustering
-  collapsed.forEach(key => {
-    if (network.isCluster('cl:' + key)) network.updateClusteredNode('cl:' + key, bubbleStyle(key));
-  });
+  collapsed.forEach(key => setBubble(key, bubbleStyle(key)));
+  if (collapsed.size) refreshGraph();   // bubbleStyle sets hidden/physics: a real re-index, once
 }
 function focusRepo(key) {
   if (collapsed.has(key)) { expandRepo(key); resettle(60); }
@@ -715,13 +729,22 @@ const gone = id => hideUntouched && stateOf(id) === 'dimmed';
 // Take every ghost out of the simulation. Runs on the toggle and again after
 // any bubble opens or closes, because vis switches physics back on for the
 // nodes and edges a cluster releases.
+// Nodes inside a bubble are frozen by vis when it clusters them; switching
+// them back on here would make the settle simulate the whole map (1,500
+// bodies for 200 drawn) and tether survivors to invisible members.
+const inBubble = id => collapsed.has(byId[id].repo);
 function applyGhostPhysics() {
-  visNodes.update(DATA.nodes.map(n => ({ id: n.id, hidden: gone(n.id), physics: !gone(n.id) })));
+  visNodes.update(DATA.nodes.map(n =>
+    ({ id: n.id, hidden: gone(n.id), physics: !gone(n.id) && !inBubble(n.id) })));
   // Edges: a spring to a frozen ghost would still tether a survivor in place.
   // Repo anchors are never tiered, so a hidden bubble's members are all gone
   // and the base edge's endpoints decide for its clustered stand-ins too.
   const edgePhysics = e => !gone(e.from) && !gone(e.to);
-  visEdges.update(DATA.edges.map((e, i) => ({ id: 'e' + i, physics: edgePhysics(e) })));
+  // A base edge into a bubble stays frozen: its clustered stand-in (below)
+  // carries the spring for it, and a live spring to a member would tether a
+  // survivor to an invisible node.
+  visEdges.update(DATA.edges.map((e, i) =>
+    ({ id: 'e' + i, physics: edgePhysics(e) && !inBubble(e.from) && !inBubble(e.to) })));
   // Cluster edges on the canvas were cloned from their base edges earlier and
   // live outside the DataSet. network.updateEdge re-indexes the whole graph
   // per call (~15 ms each, hundreds of edges), so set the option on each edge
@@ -737,7 +760,7 @@ function applyGhostPhysics() {
       changed = true;
     });
   });
-  if (changed) network.body.emitter.emit('_dataChanged');
+  if (changed) refreshGraph();
 }
 // Everything drawn at top level right now: unhidden nodes plus unhidden bubbles.
 function visibleTopIds() {
