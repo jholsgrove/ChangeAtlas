@@ -112,10 +112,31 @@ class ReportPage:
         """The row carries the `hidden` attribute (out of the DOM flow and tab order), not just display:none."""
         return self.page.evaluate("s => document.querySelector(s).hidden", S.LENS_ROW)
 
-    def lens_status(self) -> str:
+    def lens_note(self) -> str:
+        """The status sentence pinned to the map after a lens change (also the live region)."""
         self.page.wait_for_function(
-            "s => document.querySelector(s).textContent !== ''", arg=S.LENS_STATUS)
-        return self.page.locator(S.LENS_STATUS).inner_text()
+            "s => document.querySelector(s).textContent !== ''", arg=S.LENS_NOTE)
+        return self.page.locator(S.LENS_NOTE).inner_text()
+
+    def lens_note_visible(self) -> bool:
+        return self.page.locator(S.LENS_NOTE).is_visible()
+
+    def lens_caption(self) -> str:
+        return self.page.locator(S.LENS_CAPTION).inner_text()
+
+    def lens_caption_visible(self) -> bool:
+        return self.page.locator(S.LENS_CAPTION).is_visible()
+
+    def lens_tooltip(self, label: str) -> str:
+        return self.page.locator(S.LENS_BUTTON, has_text=label).first.get_attribute("title") or ""
+
+    def untouched_count(self) -> int:
+        return self.page.evaluate("counts.dimmed")
+
+    def bubble_member_count(self) -> int:
+        """Components inside the bubbles currently on the canvas."""
+        return self.page.evaluate(
+            "[...collapsed].reduce((n, k) => n + (membersOf[k] || []).length, 0)")
 
     def roll_up_visible(self) -> bool:
         return self.page.locator(S.ROLL_WRAP).is_visible()
@@ -200,6 +221,13 @@ class ReportPage:
 
     def selected_id(self):
         return self.page.evaluate("selected")
+
+    def view_tooltip(self, name: str) -> str:
+        return self.page.locator(S.VIEW_BUTTON.format(name=name)).get_attribute("title") or ""
+
+    def reset_view(self):
+        self.page.click(S.RESET)
+        self.wait_settled()
 
     def toggle_legend_chip(self, label: str):
         self.page.locator("#legend .chip", has_text=label).first.click()

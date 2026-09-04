@@ -37,7 +37,7 @@ border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;fl
 .side.collapsed .views{flex-direction:column;margin-top:10px}
 .side.collapsed .views button{font-size:0;padding:6px 0}
 .side.collapsed .views button::before{content:attr(data-abbr);font-size:12px}
-.side.collapsed .lenses{display:none}
+.side.collapsed .lenses,.side.collapsed #lens-caption{display:none}
 .side footer{border-top:1px solid var(--line);padding:10px 18px;font-size:12px;
 color:var(--muted);flex:0 0 auto}
 .side footer a{color:var(--accent);text-decoration:none}
@@ -107,6 +107,10 @@ border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
+#lens-note{position:absolute;left:12px;bottom:12px;max-width:min(60%,520px);z-index:2;
+background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:8px;
+padding:6px 10px;font-size:12px;line-height:1.4}
+#lens-note:empty,#lens-note[hidden]{display:none}
 #layout-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
 background:color-mix(in srgb,var(--bg) 75%,transparent);pointer-events:none}
 #layout-overlay[hidden]{display:none}
@@ -128,6 +132,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 <div id="app">
   <main id="main" aria-label="Impact map">
   <div id="graph" tabindex="-1"></div>
+  <div id="lens-note" role="status" aria-live="polite"></div>
   <div id="layout-overlay" hidden role="status" aria-live="polite">
     <div><span id="layout-overlay-text">Laying out the map…</span>
     <progress id="layout-progress" max="100" value="0"></progress></div>
@@ -159,14 +164,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
                 aria-label="Collapse panel">▶</button>
       </div>
       <div class="views" role="group" aria-label="View">
-        <button id="view-impact" aria-pressed="true" data-abbr="I">Impact</button>
-        <button id="view-system" aria-pressed="false" data-abbr="S">System</button>
-        <button id="view-list" aria-pressed="false" data-abbr="L">List</button>
+        <button id="view-impact" title="The map shaded by this release: what changed, what was touched, and what sits next to it." aria-pressed="true" data-abbr="I">Impact</button>
+        <button id="view-system" title="The architecture on its own, coloured by component type. No release shading." aria-pressed="false" data-abbr="S">System</button>
+        <button id="view-list" title="The impacted components as a table, with their stories and pull requests." aria-pressed="false" data-abbr="L">List</button>
       </div>
     </h1>
     <div class="controls">
       <div class="views lenses" id="lens-row" role="group" aria-label="Impact lens"></div>
-      <div id="lens-status" class="sr-only" role="status" aria-live="polite"></div>
+      <div class="hint" id="lens-caption"></div>
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
       <datalist id="nodelist"></datalist>
       <div class="legend" id="legend"></div>
@@ -598,13 +603,18 @@ const hasEvidence = key => {
 // changed/touched/test-only member, 'all' = every repo, 'none' = flat. ----
 const LENSES = {
   impact: {
-    release: { label: 'Release only', hide: true,  rule: 'evidence' },
-    context: { label: 'In context',   hide: false, rule: 'evidence' },
-    whole:   { label: 'Whole map',    hide: false, rule: 'none' },
+    release: { label: 'Release only', hide: true,  rule: 'evidence',
+               desc: 'Only what this release touched, and the repos it reaches. Untouched components are hidden.' },
+    context: { label: 'In context',   hide: false, rule: 'evidence',
+               desc: 'The release flat. Repos with nothing in it collapse into bubbles. Click a bubble to open it.' },
+    whole:   { label: 'Whole map',    hide: false, rule: 'none',
+               desc: 'Every component, untouched ones faded. The Untouched chip hides and shows them.' },
   },
   system: {
-    repos:      { label: 'Repos',      hide: false, rule: 'all' },
-    components: { label: 'Components', hide: false, rule: 'none' },
+    repos:      { label: 'Repos',      hide: false, rule: 'all',
+                  desc: 'Every repo as one bubble. Click a bubble to open it.' },
+    components: { label: 'Components', hide: false, rule: 'none',
+                  desc: 'Every component, flat.' },
   },
 };
 // Defaults come from size alone; nothing is remembered between opens.
@@ -772,7 +782,33 @@ function compactSurvivors() {
 // Applying a lens is always a clean re-apply, including a click on the one
 // already selected: that is how a reader closes bubbles they opened by hand.
 const lensRow = document.getElementById('lens-row');
-const lensStatus = document.getElementById('lens-status');
+const lensCaption = document.getElementById('lens-caption');
+const lensNote = document.getElementById('lens-note');
+const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+// One sentence, pinned to the map, saying what the active lens did to THIS
+// system: counts come from the hidden/clustered state vis holds right now,
+// so the reader sees the effect rather than having to infer it.
+function describeLens() {
+  const L = currentLens(); if (!L) return '';
+  const total = DATA.nodes.length;
+  const hidden = DATA.nodes.filter(n => gone(n.id)).length;
+  const inside = [...collapsed].reduce((n, k) => n + (membersOf[k] || []).length, 0);
+  let what;
+  if (currentView === 'system') {
+    what = L.rule === 'all' ? plural(collapsed.size, 'repo') + ' as bubbles. Click one to open it.'
+                            : 'All ' + plural(total, 'component') + ', flat.';
+  } else if (L.hide) {
+    what = plural(total - hidden, 'component') + ' in this release shown, ' + hidden + ' untouched hidden.';
+  } else if (L.rule === 'evidence') {
+    what = collapsed.size ? plural(collapsed.size, 'repo') + ' with nothing in this release collapsed into bubbles, ' +
+                            plural(inside, 'component') + ' inside.'
+                          : 'Every repo has something in this release, so nothing collapsed.';
+  } else {
+    what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + hidden + ' untouched hidden.'
+                         : 'All ' + plural(total, 'component') + ', ' + counts.dimmed + ' untouched faded.';
+  }
+  return L.label + '. ' + what;
+}
 function applyLens(name) {
   const set = LENSES[currentView];
   if (!set || !set[name]) return;
@@ -802,13 +838,10 @@ function settleCanvas(label) {
   applyGhostPhysics();
   restyleBubbles();
   if (hideUntouched) compactSurvivors();
-  // Small graphs have no overlay to speak the change; large graphs already
-  // announce it through the overlay's own status role. Clear, then write on
-  // the next frame so a repeat of the same sentence is announced again.
-  if (!LARGE) {
-    lensStatus.textContent = '';
-    requestAnimationFrame(() => { lensStatus.textContent = label; });
-  }
+  // The note is the live region: clear, then write on the next frame so a
+  // repeat of the same sentence is announced again.
+  lensNote.textContent = '';
+  requestAnimationFrame(() => { lensNote.textContent = describeLens(); });
   fitVisibleWhenSettled();
   resettle(120, label + '…');
 }
@@ -816,6 +849,8 @@ function settleCanvas(label) {
 function buildLensRow() {
   const set = LENSES[currentView];
   lensRow.hidden = !set;
+  lensCaption.hidden = !set;
+  lensNote.hidden = !set;
   lensRow.textContent = '';
   if (!set) return;
   lensRow.setAttribute('aria-label', currentView === 'impact' ? 'Impact lens' : 'System lens');
@@ -824,14 +859,18 @@ function buildLensRow() {
     b.type = 'button';
     b.dataset.lens = name;
     b.textContent = set[name].label;
+    b.title = set[name].desc;
     b.setAttribute('aria-pressed', String(lens[currentView] === name));
     b.addEventListener('click', () => applyLens(name));
     lensRow.appendChild(b);
   });
+  updateLensPressed();
 }
 function updateLensPressed() {
   lensRow.querySelectorAll('button').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.lens === lens[currentView])));
+  const L = currentLens();
+  lensCaption.textContent = L ? L.desc : '';
 }
 
 // ---- per-repo roll-up (side panel in Impact view; List view always) ----
@@ -888,9 +927,9 @@ document.getElementById('reset').onclick = () => {
   buildLegend();
   network.unselectAll();
   detail.innerHTML = '<p class="empty">Select a node to see what it does and what it connects to.</p>';
-  lens.impact = DEFAULT_LENS.impact;
-  lens.system = DEFAULT_LENS.system;
-  if (currentView !== 'list') applyLens(DEFAULT_LENS[currentView]);
+  // Re-apply the lens the reader chose: hand-opened bubbles close and the
+  // Untouched refinement is undone, but Reset never changes lens for them.
+  if (currentView !== 'list') applyLens(lens[currentView]);
 };
 
 // ---- accessible list view (WCAG 1.1.1 / 1.4.1: non-canvas equivalent of the graph) ----
@@ -1171,9 +1210,11 @@ function applySide(collapsed) {
   sideToggle.setAttribute('aria-expanded', String(!collapsed));
   sideToggle.setAttribute('aria-label', collapsed ? 'Expand panel' : 'Collapse panel');
   sideToggle.textContent = collapsed ? '◀' : '▶';
-  // Collapsed view buttons show one letter; give the full name as a tooltip.
+  // Each view button explains itself in its title. Collapsed buttons show one
+  // letter, so the tooltip leads with the full name there.
   Object.values(viewButtons).forEach(b => {
-    if (collapsed) b.title = b.textContent; else b.removeAttribute('title');
+    if (!b.dataset.desc) b.dataset.desc = b.title;
+    b.title = collapsed ? b.textContent + '. ' + b.dataset.desc : b.dataset.desc;
   });
   // vis-network only watches *window* resize; push the container's new width through.
   network.setSize('100%', '100%');
@@ -1225,6 +1266,7 @@ applyTheme(theme); // initial paint: CSS vars, logo, favicon, toggle state
 buildLensRow();
 buildLegend();
 applyGrouping();   // initial: collapse per the default lens before the first layout settles. Skips applyLens on purpose: neither default lens hides, and a second stabilize() during the first would fight it.
+lensNote.textContent = describeLens();   // the note has no settle to wait for at bootstrap
 </script>
 </body>
 </html>

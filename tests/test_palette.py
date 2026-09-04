@@ -39,6 +39,9 @@ def test_text_contrast_aa(theme):          # WCAG 1.4.3: 4.5:1 for text
     assert contrast(p["text"], p["bg"]) >= 4.5
     assert contrast(p["text"], p["panel_bg"]) >= 4.5
     assert contrast(p["link"], p["panel_bg"]) >= 4.5
+    # hint text (lens caption, footer, empty states) is real text too
+    assert contrast(p["muted_text"], p["bg"]) >= 4.5
+    assert contrast(p["muted_text"], p["panel_bg"]) >= 4.5
 
 
 @pytest.mark.parametrize("theme", THEME_IDS)

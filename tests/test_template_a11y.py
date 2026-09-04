@@ -278,17 +278,17 @@ def test_lens_row_scaffolding_present():
     assert "b.setAttribute('aria-pressed', String(lens[currentView] === name))" in html
     # out of the DOM flow (and tab order) in List view and the collapsed rail
     assert "lensRow.hidden = !set" in html
-    assert ".side.collapsed .lenses{display:none}" in html
+    assert ".side.collapsed .lenses,.side.collapsed #lens-caption{display:none}" in html
 
 
 def test_lens_table_has_exactly_the_five_lenses():
     html = _render()
     for row in (
-        "release: { label: 'Release only', hide: true,  rule: 'evidence' }",
-        "context: { label: 'In context',   hide: false, rule: 'evidence' }",
-        "whole:   { label: 'Whole map',    hide: false, rule: 'none' }",
-        "repos:      { label: 'Repos',      hide: false, rule: 'all' }",
-        "components: { label: 'Components', hide: false, rule: 'none' }",
+        "release: { label: 'Release only', hide: true,  rule: 'evidence',",
+        "context: { label: 'In context',   hide: false, rule: 'evidence',",
+        "whole:   { label: 'Whole map',    hide: false, rule: 'none',",
+        "repos:      { label: 'Repos',      hide: false, rule: 'all',",
+        "components: { label: 'Components', hide: false, rule: 'none',",
     ):
         assert row in html
     assert html.count("hide: ") == 5
@@ -330,11 +330,51 @@ def test_settle_canvas_is_the_shared_tail():
         assert frag in tail, frag
 
 
-def test_lens_change_is_announced():
+def test_lens_note_is_the_visible_live_region():
+    # The canvas note is what sighted readers see AND what assistive tech
+    # hears after a lens change: one sentence, one live region, no separate
+    # visually-hidden announcer. It sits over the map (inside <main>) and is
+    # drawn in full text colour on the panel surface, not faded.
     html = _render()
-    assert 'id="lens-status" class="sr-only" role="status" aria-live="polite"' in html
-    assert "lensStatus.textContent = label" in html
-    assert ".sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}" in html
+    assert 'id="lens-note" role="status" aria-live="polite"' in html
+    assert 'id="lens-status"' not in html
+    assert html.index("<main") < html.index('id="lens-note"') < html.index("</main>")
+    assert "#lens-note{" in html
+    css = html[html.index("#lens-note{"):html.index("}", html.index("#lens-note{"))]
+    assert "color:var(--fg)" in css and "background:var(--panel)" in css
+    assert "opacity" not in css
+
+
+def test_lens_note_describes_what_the_lens_did():
+    html = _render()
+    assert "function describeLens()" in html
+    assert "lensNote.textContent = describeLens()" in html
+    for frag in ("' in this release shown, '", "' untouched hidden.'",
+                 "' with nothing in this release collapsed into bubbles, '", "' inside.'",
+                 "' untouched faded.'", "' as bubbles. Click one to open it.'",
+                 "lensNote.textContent = describeLens();   // the note has no settle to wait for at bootstrap"):
+        assert frag in html, frag
+
+
+def test_view_buttons_have_tooltips():
+    html = _render()
+    for frag in (
+        'id="view-impact" title="',
+        'id="view-system" title="',
+        'id="view-list" title="',
+    ):
+        assert frag in html, frag
+
+
+def test_lens_caption_and_tooltips_come_from_the_lens_table():
+    html = _render()
+    assert html.count("desc: '") == 5
+    assert 'class="hint" id="lens-caption"' in html
+    assert "b.title = set[name].desc" in html
+    assert "lensCaption.textContent = " in html
+    # gone with the row in List view and the collapsed rail
+    assert "lensCaption.hidden = !set" in html
+    assert ".side.collapsed .lenses,.side.collapsed #lens-caption{display:none}" in html
 
 
 def test_lens_row_and_status_live_outside_the_heading():
@@ -343,7 +383,7 @@ def test_lens_row_and_status_live_outside_the_heading():
     html = _render()
     h1_close = html.index("</h1>")
     assert html.index('id="lens-row"') > h1_close
-    assert html.index('id="lens-status"') > h1_close
+    assert html.index('id="lens-caption"') > h1_close
     assert html.index('id="lens-row"') < html.index('id="search"')
 
 
@@ -368,13 +408,15 @@ def test_hidden_bubbles_leave_physics_and_ghosts_are_reapplied_on_resettle():
     assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
 
 
-def test_reset_returns_to_the_default_lens():
+def test_reset_reapplies_the_current_lens_not_the_default():
+    # Reset cleans up inside the lens the reader chose (selection, filters,
+    # hand-opened bubbles, the Untouched refinement); it never changes lens.
     html = _render()
     i = html.index("document.getElementById('reset').onclick")
     body = html[i:i + 900]
     assert "filteredTiers.clear()" in body and "filteredTypes.clear()" in body
-    assert "lens.impact = DEFAULT_LENS.impact;" in body
-    assert "if (currentView !== 'list') applyLens(DEFAULT_LENS[currentView]);" in body
+    assert "DEFAULT_LENS" not in body
+    assert "if (currentView !== 'list') applyLens(lens[currentView]);" in body
 
 
 def test_view_switch_applies_that_views_lens():

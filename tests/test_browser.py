@@ -12,7 +12,9 @@ runtime that static checks can't see. Currently two:
     hiding and packing, a re-click closing hand-opened bubbles, and the
     lens row leaving the tab order in List view,
   * the hover spotlight yields back to the selected node once the pointer
-    leaves (hoverNode/blurNode are vis canvas events).
+    leaves (hoverNode/blurNode are vis canvas events),
+  * the lens caption and the canvas note say what the active lens did, with
+    counts taken from the clustered/hidden state vis actually holds.
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -212,9 +214,48 @@ def test_roll_up_table_is_gone_in_list_and_system_views(large_report):
     assert large_report.roll_up_visible()
 
 
-def test_lens_change_is_announced(report):
+def test_lens_note_reports_what_release_only_did(report):
+    total, tiered = report.total_node_count(), report.tiered_node_count()
     report.choose_lens("Release only")
-    assert report.lens_status() == "Showing Release only"
+    assert report.lens_note() == (
+        f"Release only. {tiered} components in this release shown, {total - tiered} untouched hidden.")
+    assert report.lens_note_visible()
+
+
+def test_lens_note_reports_whole_map_and_the_untouched_toggle(report):
+    total, untouched = report.total_node_count(), report.untouched_count()
+    assert report.lens_note() == f"Whole map. All {total} components, {untouched} untouched faded."
+    report.toggle_legend_chip("Untouched")
+    assert report.lens_note() == (
+        f"Whole map. {total - untouched} components shown, {untouched} untouched hidden.")
+    report.toggle_legend_chip("Untouched")
+    assert report.lens_note() == f"Whole map. All {total} components, {untouched} untouched faded."
+
+
+def test_lens_note_counts_the_bubbles_in_context(large_report):
+    bubbles, inside = large_report.bubble_count(), large_report.bubble_member_count()
+    assert large_report.lens_note() == (
+        f"In context. {bubbles} repos with nothing in this release collapsed into bubbles, "
+        f"{inside} components inside.")
+    large_report.switch_view("system")
+    assert large_report.lens_note() == (
+        f"Repos. {large_report.repo_count()} repos as bubbles. Click one to open it.")
+
+
+def test_lens_note_is_gone_in_list_view(report):
+    assert report.lens_note_visible()
+    report.switch_view("list")
+    assert not report.lens_note_visible()
+
+
+def test_lens_caption_follows_the_active_lens_and_matches_the_tooltips(report):
+    assert report.lens_caption() == report.lens_tooltip("Whole map")
+    whole = report.lens_caption()
+    report.choose_lens("Release only")
+    assert report.lens_caption() == report.lens_tooltip("Release only") != whole
+    assert "hidden" in report.lens_caption()
+    report.switch_view("list")
+    assert not report.lens_caption_visible()
 
 
 def test_whole_map_untouched_chip_hides_and_shows_untouched(report):
@@ -260,3 +301,29 @@ def test_hover_spotlight_yields_back_to_the_selected_node(report):
     report.move_mouse_off_nodes()
     assert report.node_opacity(a) == 1, "selected node went dark after hovering elsewhere"
     assert report.node_opacity(b) < 1, "hovered node stayed lit after the pointer left"
+
+
+def test_reset_keeps_the_chosen_lens_and_closes_hand_opened_bubbles(report):
+    # Small map: the System default is Components, so a Reset that fell back
+    # to the default would silently leave the Repos lens the reader chose.
+    report.switch_view("system")
+    report.choose_lens("Repos")
+    repos = report.repo_count()
+    assert report.bubble_count() == repos
+    report.click_first_bubble()
+    assert report.bubble_count() == repos - 1
+    report.reset_view()
+    assert report.active_lens() == "Repos"
+    assert report.bubble_count() == repos
+
+
+def test_view_buttons_keep_their_tooltips_expanded_and_collapsed(report):
+    # The collapsed rail rewrites these titles (one-letter buttons need the
+    # name); the expanded panel must still explain what each view shows.
+    expanded = {n: report.view_tooltip(n) for n in ("impact", "system", "list")}
+    assert all(len(t) > 20 for t in expanded.values()), expanded
+    report.toggle_side_panel()
+    assert report.view_tooltip("impact").startswith("Impact")
+    assert expanded["impact"] in report.view_tooltip("impact")
+    report.toggle_side_panel()
+    assert report.view_tooltip("impact") == expanded["impact"]

@@ -188,7 +188,11 @@ tighter matching.
 
 Readability depends on how many *untouched* nodes are drawn, not on the
 size of the atlas, so the side panel offers a row of **lenses** under the
-view switch. In Impact view:
+view switch. A caption under the row (and a tooltip on each button) says
+what the lens does, and a note pinned to the map says what it just did to
+this system, with counts: how many components are hidden, how many repos
+collapsed into bubbles and how many components sit inside them. In Impact
+view:
 
 - **Release only** — untouched nodes are gone, and so is every repo with
   nothing in the release. What is left is pulled together so the survivors
