@@ -10,7 +10,9 @@ runtime that static checks can't see. Currently two:
   * Export PNG really produces an opaque, canvas-sized image, and
   * lenses on the 100-repo sample: the default lens per view, Release only
     hiding and packing, a re-click closing hand-opened bubbles, and the
-    lens row leaving the tab order in List view.
+    lens row leaving the tab order in List view,
+  * the hover spotlight yields back to the selected node once the pointer
+    leaves (hoverNode/blurNode are vis canvas events).
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -243,3 +245,18 @@ def test_peripheral_pill_turns_amber_bubbles_plain(large_report):
     assert large_report.amber_bubble_count() == 0
     large_report.toggle_legend_chip("Peripheral")
     assert large_report.amber_bubble_count() > 0
+
+
+def test_hover_spotlight_yields_back_to_the_selected_node(report):
+    # Click a node, hover a node it is not connected to, move away: the
+    # selection must be lit again and the hovered node must recede.
+    report.switch_view("system")
+    a, b = report.unconnected_node_pair()
+    report.click_node(a)
+    assert report.selected_id() == a
+    assert report.node_opacity(a) == 1
+    report.hover_node(b)
+    assert report.node_opacity(b) == 1          # hover spotlight while pointing
+    report.move_mouse_off_nodes()
+    assert report.node_opacity(a) == 1, "selected node went dark after hovering elsewhere"
+    assert report.node_opacity(b) < 1, "hovered node stayed lit after the pointer left"

@@ -444,7 +444,9 @@ function clearSpotlight() {
   });
 }
 network.on('hoverNode', p => spotlight(neighbours(p.node)));
-network.on('blurNode', () => { if (!selected) clearSpotlight(); });
+// Leaving a node hands the spotlight back to the open selection, if any;
+// otherwise the map returns to its resting shading.
+network.on('blurNode', () => { if (selected) spotlight(neighbours(selected)); else clearSpotlight(); });
 
 // ---- detail panel ----
 let selected = null;

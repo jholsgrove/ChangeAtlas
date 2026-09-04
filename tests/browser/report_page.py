@@ -150,6 +150,57 @@ class ReportPage:
         self.page.mouse.click(x, y)
         self.wait_settled()
 
+    # ---- selection and hover spotlight ----
+
+    def _dom_point_of(self, node_id: str) -> tuple:
+        return tuple(self.page.evaluate("""id => {
+          const d = network.canvasToDOM(network.getPositions([id])[id]);
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          return [r.left + d.x, r.top + d.y];
+        }""", node_id))
+
+    def unconnected_node_pair(self) -> tuple:
+        """Two visible nodes with no edge between them (so one's spotlight excludes the other)."""
+        return tuple(self.page.evaluate("""() => {
+          const ids = network.body.nodeIndices.filter(i => !network.isCluster(i));
+          for (const a of ids) {
+            const near = new Set(network.getConnectedNodes(a));
+            const b = ids.find(o => o !== a && !near.has(o));
+            if (b) return [a, b];
+          }
+          return null;
+        }"""))
+
+    def click_node(self, node_id: str):
+        x, y = self._dom_point_of(node_id)
+        self.page.mouse.click(x, y)
+
+    def hover_node(self, node_id: str):
+        x, y = self._dom_point_of(node_id)
+        self.page.mouse.move(x, y)
+        self.page.wait_for_function(
+            "id => network.body.nodes[id].hover === true", arg=node_id)
+
+    def move_mouse_off_nodes(self):
+        """Move the pointer to an empty spot on the canvas, so vis fires blurNode."""
+        x, y = self.page.evaluate("""() => {
+          const r = document.querySelector('#graph canvas').getBoundingClientRect();
+          const pts = network.body.nodeIndices.map(i => network.canvasToDOM(network.getPositions([i])[i]));
+          for (let y = 10; y < r.height; y += 15) for (let x = 10; x < r.width; x += 15) {
+            if (pts.every(p => Math.hypot(p.x - x, p.y - y) > 60)) return [r.left + x, r.top + y];
+          }
+          return [r.left + 5, r.top + 5];
+        }""")
+        self.page.mouse.move(x, y)
+        self.page.wait_for_function(
+            "() => Object.values(network.body.nodes).every(n => n.hover !== true)")
+
+    def node_opacity(self, node_id: str) -> float:
+        return self.page.evaluate("id => network.body.nodes[id].options.opacity", node_id)
+
+    def selected_id(self):
+        return self.page.evaluate("selected")
+
     def toggle_legend_chip(self, label: str):
         self.page.locator("#legend .chip", has_text=label).first.click()
 
