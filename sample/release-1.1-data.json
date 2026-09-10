@@ -1,0 +1,48 @@
+{
+  "release": "1.1",
+  "query": "sample-fictional-query",
+  "fetched_at": "2026-09-07T00:00:00+00:00",
+  "skipped": [],
+  "work_items": [
+    {
+      "id": 111,
+      "type": "User Story",
+      "title": "Tiered pricing for trade customers",
+      "url": "https://tracker.example/workitems/111",
+      "prs": [
+        {
+          "id": 21,
+          "title": "Tiered price bands in the pricing engine",
+          "repo": "shop-catalog",
+          "url": "https://tracker.example/shop-catalog/pullrequest/21",
+          "status": "completed",
+          "files": [
+            "/src/pricing/TierBands.cs",
+            "/src/pricing/PriceResolver.cs",
+            "/src/pricing/Rounding.cs"
+          ]
+        },
+        {
+          "id": 22,
+          "title": "Expose price bands on the catalog API",
+          "repo": "shop-catalog",
+          "url": "https://tracker.example/shop-catalog/pullrequest/22",
+          "status": "completed",
+          "files": [
+            "/src/catalog-api/Controllers/PriceController.cs",
+            "/src/catalog-api/Dto/PriceBandDto.cs",
+            "/src/catalog-api/Mapping/PriceBandProfile.cs",
+            "/src/catalog-db/migrations/202609_AddPriceBands.sql"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 112,
+      "type": "Task",
+      "title": "Release notes for 1.1",
+      "url": "https://tracker.example/workitems/112",
+      "prs": []
+    }
+  ]
+}

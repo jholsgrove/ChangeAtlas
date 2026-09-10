@@ -1,0 +1,76 @@
+{
+  "release": "1.2",
+  "query": "sample-fictional-query",
+  "fetched_at": "2026-09-14T00:00:00+00:00",
+  "skipped": [],
+  "work_items": [
+    {
+      "id": 121,
+      "type": "User Story",
+      "title": "Split shipments per order",
+      "url": "https://tracker.example/workitems/121",
+      "prs": [
+        {
+          "id": 31,
+          "title": "Shipment groups on the orders API",
+          "repo": "shop-orders",
+          "url": "https://tracker.example/shop-orders/pullrequest/31",
+          "status": "completed",
+          "files": [
+            "/src/orders-api/Controllers/ShipmentsController.cs",
+            "/src/orders-api/Dto/ShipmentGroupDto.cs",
+            "/src/orders-api/Services/ShipmentSplitter.cs"
+          ]
+        },
+        {
+          "id": 32,
+          "title": "One invoice per shipment",
+          "repo": "shop-orders",
+          "url": "https://tracker.example/shop-orders/pullrequest/32",
+          "status": "completed",
+          "files": [
+            "/src/invoicing/InvoiceBuilder.cs",
+            "/src/invoicing/ShipmentInvoice.cs",
+            "/src/invoicing/Templates/Invoice.cshtml"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 122,
+      "type": "Bug",
+      "title": "Shipping estimate missing at checkout",
+      "url": "https://tracker.example/workitems/122",
+      "prs": [
+        {
+          "id": 33,
+          "title": "Show shipping estimate on the review step",
+          "repo": "shop-web",
+          "url": "https://tracker.example/shop-web/pullrequest/33",
+          "status": "completed",
+          "files": [
+            "/src/checkout/ShippingEstimate.tsx"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 123,
+      "type": "Task",
+      "title": "Search index regression tests",
+      "url": "https://tracker.example/workitems/123",
+      "prs": [
+        {
+          "id": 34,
+          "title": "Add relevance regression tests",
+          "repo": "shop-catalog",
+          "url": "https://tracker.example/shop-catalog/pullrequest/34",
+          "status": "completed",
+          "files": [
+            "/src/search/tests/RelevanceTests.cs"
+          ]
+        }
+      ]
+    }
+  ]
+}
