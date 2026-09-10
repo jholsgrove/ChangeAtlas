@@ -310,12 +310,12 @@ def test_old_toggles_are_gone():
 
 def test_apply_lens_is_a_clean_reapply():
     html = _render()
-    i = html.index("function applyLens(name)")
+    i = html.index("function applyLens(name")
     body = html[i:i + 900]
     assert "hideUntouched = L.hide;" in body
     assert "applyGrouping();" in body            # discards manual opens, collapses per rule
     assert "buildLegend();" in body              # the Untouched entry is a toggle only on Whole map
-    assert "settleCanvas('Showing ' + L.label);" in body
+    assert "settleCanvas('Showing ' + L.label, keepView);" in body
 
 
 def test_settle_canvas_is_the_shared_tail():
@@ -323,9 +323,9 @@ def test_settle_canvas_is_the_shared_tail():
     # of (or back into) physics, bubbles restyled, survivors packed when
     # hiding, then settle and frame what is left.
     html = _render()
-    k = html.index("function settleCanvas(label)")
+    k = html.index("function settleCanvas(label")
     tail = html[k:k + 700]
-    for frag in ("applyGhostPhysics();", "restyleBubbles();", "if (hideUntouched) compactSurvivors();",
+    for frag in ("keepView", "applyGhostPhysics();", "restyleBubbles();", "if (hideUntouched) compactSurvivors();",
                  "fitVisibleWhenSettled();", "resettle(120, label + '…');"):
         assert frag in tail, frag
 
@@ -555,15 +555,16 @@ def test_release_slider_swaps_tiers_and_reapplies_the_lens():
     assert "function setRelease(label)" in html
     # tier sets must be reassignable, not const
     assert "let CHANGED" in html and "const CHANGED" not in html
-    # the lens is re-applied because Release only / In context depend on tiers
-    assert "applyLens(lens.impact)" in html
+    # the lens is re-applied because Release only / In context depend on tiers,
+    # keeping the reader's zoom (keepView skips the whole-map refit)
+    assert "applyLens(lens.impact, { keepView: true })" in html
     # the slider never touches the List view or the Obsidian export
     assert "DATA.impact[key] || []" in html          # buildListView still reads DATA
 
 
 def test_release_slider_is_skipped_when_history_is_false():
     html = _render()
-    assert "DATA.history !== false" in html
+    assert "DATA.history === false" in html
 
 
 def test_detail_panel_links_to_the_older_release_report():

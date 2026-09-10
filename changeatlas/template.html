@@ -116,7 +116,6 @@ padding:0 2px}
 #release-caption{margin-top:2px}
 .visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
 white-space:nowrap}
-.side.collapsed #release-slider{display:none}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
@@ -181,6 +180,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         <button id="view-system" title="The architecture on its own, coloured by component type. No release shading." aria-pressed="false" data-abbr="S">System</button>
         <button id="view-list" title="The impacted components as a table, with their stories and pull requests." aria-pressed="false" data-abbr="L">List</button>
       </div>
+    </h1>
+    <div class="controls">
       <fieldset id="release-slider" hidden>
         <legend class="visually-hidden">Release shown on the map</legend>
         <input id="release-range" type="range" min="0" max="0" step="1" value="0"
@@ -188,8 +189,6 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         <datalist id="release-ticks"></datalist>
         <div class="hint" id="release-caption" aria-live="polite"></div>
       </fieldset>
-    </h1>
-    <div class="controls">
       <div class="views lenses" id="lens-row" role="group" aria-label="Impact lens"></div>
       <div class="hint" id="lens-caption"></div>
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
@@ -908,7 +907,7 @@ function describeLens() {
   }
   return L.label + '. ' + what;
 }
-function applyLens(name) {
+function applyLens(name, { keepView = false } = {}) {
   const set = LENSES[currentView];
   if (!set || !set[name]) return;
   lens[currentView] = name;
@@ -917,7 +916,7 @@ function applyLens(name) {
   applyGrouping();
   updateLensPressed();
   buildLegend();
-  settleCanvas('Showing ' + L.label);
+  settleCanvas('Showing ' + L.label, keepView);
 }
 // Whole map is the one lens that shows untouched nodes flat, so it is the one
 // place the Untouched legend entry hides and shows them (Release only has
@@ -933,7 +932,7 @@ function toggleUntouched() {
 // Shared tail of a lens change and the Untouched toggle: ghosts out of (or
 // back into) physics, bubbles restyled, survivors packed when hiding, then
 // settle and frame what is left. `label` is what assistive tech hears.
-function settleCanvas(label) {
+function settleCanvas(label, keepView = false) {
   applyGhostPhysics();
   restyleBubbles();
   // A selection the lens just hid (or folded into a bubble) would keep its
@@ -944,7 +943,7 @@ function settleCanvas(label) {
   // repeat of the same sentence is announced again.
   lensNote.textContent = '';
   requestAnimationFrame(() => { lensNote.textContent = describeLens(); });
-  fitVisibleWhenSettled();
+  if (!keepView) fitVisibleWhenSettled();
   resettle(120, label + '…');
 }
 // The row is rebuilt only on a view switch so a re-click keeps its focus.
@@ -1093,7 +1092,7 @@ function loadScript(src) {
 }
 function initReleaseSlider() {
   const manifest = window.CHANGEATLAS_RELEASES;
-  if (!(DATA.history !== false && Array.isArray(manifest))) return;
+  if (DATA.history === false || !Array.isArray(manifest)) return;
   const stops = manifest
     .filter(e => e && typeof e.label === 'string' && typeof e.history === 'string')
     .map(e => ({ label: e.label, fetchedAt: e.fetchedAt || '', report: e.report || null,
@@ -1141,9 +1140,10 @@ function setRelease(label) {
   buildStats();
   buildLegend();
   // Release only and In context are functions of the tiers: re-apply. This
-  // also rebuilds the roll-up, drops a selection the lens no longer draws,
-  // and keeps the reader's zoom (applyLens never fits the whole map).
-  applyLens(lens.impact);
+  // also rebuilds the roll-up and drops a selection the lens no longer
+  // draws. keepView: true skips the whole-map refit so the reader's zoom
+  // survives the stop change.
+  applyLens(lens.impact, { keepView: true });
   if (selected) showNode(selected);   // panel re-rendered against the new release
   sliderInput.setAttribute('aria-valuetext', 'Release ' + label);
   describeRelease();
