@@ -536,3 +536,29 @@ def test_spotlight_includes_bubbles():
     spot = html[i:j]
     assert "setBubble(key, { opacity: keep.has('cl:' + key) ? 1 : 0.12 })" in spot
     assert "setBubble(key, { opacity: bubbleOpacity(key) })" in html[j:j + 600]
+
+
+def test_release_slider_scaffolding_present_and_hidden_by_default():
+    html = _render()
+    assert '<script src="releases.js"></script>' in html
+    assert '<fieldset id="release-slider" hidden' in html
+    assert 'id="release-range"' in html and 'type="range"' in html
+    assert 'aria-label="Release"' in html
+    assert 'list="release-ticks"' in html and '<datalist id="release-ticks">' in html
+    assert 'id="release-caption"' in html and 'aria-live="polite"' in html
+
+
+def test_release_slider_swaps_tiers_and_reapplies_the_lens():
+    html = _render()
+    assert "function setRelease(label)" in html
+    # tier sets must be reassignable, not const
+    assert "let CHANGED" in html and "const CHANGED" not in html
+    # the lens is re-applied because Release only / In context depend on tiers
+    assert "applyLens(lens.impact)" in html
+    # the slider never touches the List view or the Obsidian export
+    assert "DATA.impact[key] || []" in html          # buildListView still reads DATA
+
+
+def test_release_slider_is_skipped_when_history_is_false():
+    html = _render()
+    assert "DATA.history !== false" in html
