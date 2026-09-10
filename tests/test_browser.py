@@ -20,7 +20,12 @@ runtime that static checks can't see. Currently two:
     bubble (vis-network's `_dataChanged` is a full O(nodes+edges) rebuild),
   * the release slider on the 100-repo sample re-shades the map, re-applies
     the lens, and drops a selection the new stop folds into a bubble (tier
-    sets, clustering and selection are all canvas state).
+    sets, clustering and selection are all canvas state), and keeps the
+    reader's zoom across the move,
+  * a report opened on its own (no releases.js beside it) shows no slider
+    and throws no uncaught error,
+  * a manifest entry whose sidecar 404s is dropped from the slider's stops
+    rather than wedging it.
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -29,6 +34,7 @@ isn't installed or Chrome can't be launched, so `pip install pytest` alone
 still gives a green suite. CI installs Playwright and uses the runner's
 bundled Chrome, so nothing is downloaded there either.
 """
+import shutil
 import struct
 from pathlib import Path
 
@@ -59,14 +65,22 @@ def browser():
 
 
 @pytest.fixture(scope="module")
-def report_url(tmp_path_factory):
+def shop_series_dir(tmp_path_factory):
+    """Render the shop sample once; the out/sample series directory it produced
+    (report + sidecars + manifest), reused by report_url and the standalone-
+    report regression tests below."""
     base = tmp_path_factory.mktemp("report")
     (base / "sample").mkdir()
     for f in (BASE / "sample").iterdir():
         if f.is_file():
             (base / "sample" / f.name).write_bytes(f.read_bytes())
     assert main(["--sample", "--base-dir", str(base)]) == 0
-    return (base / "out" / "sample" / "impact-1.0.html").resolve().as_uri()
+    return base / "out" / "sample"
+
+
+@pytest.fixture(scope="module")
+def report_url(shop_series_dir):
+    return (shop_series_dir / "impact-1.0.html").resolve().as_uri()
 
 
 @pytest.fixture(scope="module")
@@ -426,7 +440,13 @@ def test_release_slider_reshades_reapplies_the_lens_and_drops_a_hidden_selection
     target = large_report.node_changed_at_but_absent_now("1.4")
     assert target is not None
 
+    # Zoom is kept across a slider move: setRelease re-applies the lens with
+    # keepView so the whole-map refit is skipped (spec: "Zoom is kept").
+    large_report.zoom_to(2.5)
+    assert large_report.scale() == pytest.approx(2.5)
+
     large_report.slide_to("1.4")
+    assert large_report.scale() == pytest.approx(2.5, abs=1e-6), "slider move discarded the reader's zoom"
     assert large_report.shown_release() == "1.4"
     assert "Release 1.4" in large_report.slider_caption()
     assert large_report.tier_of(target) == "changed"
@@ -443,3 +463,39 @@ def test_release_slider_reshades_reapplies_the_lens_and_drops_a_hidden_selection
     assert large_report.selected_id() is None
     assert large_report.spotlit_residue() == 0
     assert large_report.bubble_count() == bubbles_at_1_0
+
+
+def test_lone_report_has_no_slider_and_no_errors(browser, shop_series_dir, tmp_path_factory):
+    # The most common real-world path: a report emailed or copied on its own,
+    # with no releases.js beside it. The <script src> 404s (a network error,
+    # not a JS exception); the slider must stay hidden and nothing must throw.
+    lone_dir = tmp_path_factory.mktemp("lone")
+    shutil.copy(shop_series_dir / "impact-1.2.html", lone_dir / "impact-1.2.html")
+    url = (lone_dir / "impact-1.2.html").resolve().as_uri()
+
+    r = ReportPage.open(browser, url)
+    try:
+        assert not r.slider_visible()
+        assert r.page.evaluate("STOPS.length") == 0
+        assert r.page_errors() == []
+    finally:
+        r.close()
+
+
+def test_missing_sidecar_is_dropped_from_the_stops(browser, shop_series_dir, tmp_path_factory):
+    # A manifest entry whose sidecar file is missing (a stale or hand-edited
+    # out/ folder) must be dropped from the slider's stops, not wedge init.
+    series_dir = tmp_path_factory.mktemp("series")
+    for f in shop_series_dir.iterdir():
+        if f.is_file():
+            shutil.copy(f, series_dir / f.name)
+    (series_dir / "impact-1.1.history.js").unlink()
+    url = (series_dir / "impact-1.2.html").resolve().as_uri()
+
+    r = ReportPage.open(browser, url)
+    try:
+        r.wait_slider()
+        assert r.slider_stops() == ["1.0", "1.2"]
+        assert r.page_errors() == []
+    finally:
+        r.close()

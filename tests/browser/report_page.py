@@ -30,15 +30,28 @@ href => new Promise(done => {
 class ReportPage:
     def __init__(self, page: Page):
         self.page = page
+        self.errors = []
 
     @classmethod
     def open(cls, browser: Browser, url: str, viewport=(1400, 900)) -> "ReportPage":
-        """Open the report in a fresh context (so localStorage starts empty)."""
+        """Open the report in a fresh context (so localStorage starts empty).
+
+        A pageerror listener is attached before navigation, not after, so an
+        uncaught exception thrown while the template's bootstrap scripts run
+        (e.g. a lone report's missing releases.js, or a manifest entry whose
+        sidecar 404s) is still caught -- see page_errors().
+        """
         ctx = browser.new_context(viewport={"width": viewport[0], "height": viewport[1]})
         page = ctx.new_page()
+        obj = cls(page)
+        page.on("pageerror", lambda exc: obj.errors.append(str(exc)))
         page.goto(url)
         page.wait_for_selector(S.GRAPH_CANVAS)
-        return cls(page)
+        return obj
+
+    def page_errors(self) -> list:
+        """Uncaught JS exceptions seen since open() -- empty means the page ran clean."""
+        return self.errors
 
     def close(self):
         self.page.context.close()
@@ -374,8 +387,15 @@ class ReportPage:
 
     def node_changed_at_but_absent_now(self, label: str) -> str:
         """A node changed at `label` whose repo has nothing in the shown release
-        (so it sits in a bubble now and its repo opens when the slider reaches `label`)."""
+        (so it sits in a bubble now and its repo opens when the slider reaches `label`).
+
+        `&& stateOf(id) === 'dimmed'` is required, not decorative: a repo with
+        only peripheral members in the current release still satisfies
+        `!hasEvidence(...)` (peripheral is not "evidence"), so without this
+        clause the candidate could come back peripheral rather than untouched,
+        and a caller asserting `tier_of(target) == "dimmed"` would fail.
+        """
         return self.page.evaluate("""label => {
           const h = window.CHANGEATLAS_HISTORY[label];
-          return h.impact.changed.find(id => !hasEvidence(byId[id].repo)) || null;
+          return h.impact.changed.find(id => !hasEvidence(byId[id].repo) && stateOf(id) === 'dimmed') || null;
         }""", label)
