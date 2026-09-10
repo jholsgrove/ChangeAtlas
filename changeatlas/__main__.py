@@ -225,7 +225,8 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
             print(f"Using cached ADO data: {rel.path}")
             gathered = json.loads(rel.path.read_text(encoding="utf-8"))
             _render_one(rel.label, gathered, graph, components, heur, args, out_dir)
-        _write_history(out_dir, sample_dir, graph, components, heur, args.changed_threshold)
+        if not args.anonymize:
+            _write_history(out_dir, sample_dir, graph, components, heur, args.changed_threshold)
         return 0
 
     if not release:

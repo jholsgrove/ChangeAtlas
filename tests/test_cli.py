@@ -374,3 +374,13 @@ def test_anonymized_render_writes_no_history_files(tmp_path):
     assert not (out / "releases.js").exists()
     assert not (out / "impact-1.0.history.js").exists()
     assert '"history": false' in (out / "impact-1.0-anon.html").read_text(encoding="utf-8")
+
+
+def test_anonymized_sample_render_writes_no_history_files(tmp_path):
+    root = _stage_shop_sample(tmp_path)
+    rc = main(["--sample", "--anonymize", "--base-dir", str(root), "--vis", str(root / "vis.js")])
+    assert rc == 0
+    series = root / "out" / "sample"
+    assert not (series / "releases.js").exists()
+    assert not (series / "impact-1.0.history.js").exists()
+    assert '"history": false' in (series / "impact-1.0-anon.html").read_text(encoding="utf-8")
