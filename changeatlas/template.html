@@ -537,22 +537,34 @@ function showNode(id) {
     out.map(e => row(e.to, e.kind, e.note, 'out')).join('') + '</ul>';
   if (inc.length) h += '<h4>Used by</h4><ul>' +
     inc.map(e => row(e.from, e.kind, e.note, 'in')).join('') + '</ul>';
-  const det = currentView === 'system' ? null : DATA.details[id];
+  const own = currentRelease === DATA.release;
+  const det = currentView === 'system' ? null : tierCountsFor(id);
   if (det && (det.prodFiles || det.testFiles)) {
     h += '<h4>Change size</h4><ul><li>' + det.prodFiles + ' production file(s), ' +
-         det.testFiles + ' test file(s) changed</li></ul>';
+         det.testFiles + ' test file(s) changed' + (own ? '' : ' in release ' + esc(currentRelease)) +
+         '</li></ul>';
   }
-  if (det && det.stories.length) {
+  if (own && det && det.stories.length) {
     h += '<h4>Stories in this release</h4><ul>' + det.stories.map(s =>
       '<li><span class="kind">' + esc(s.type) + '</span>' +
       '<a href="' + esc(safeUrl(s.url)) + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a></li>'
     ).join('') + '</ul>';
   }
-  if (det && det.prs.length) {
+  if (own && det && det.prs.length) {
     h += '<h4>Pull requests</h4><ul>' + det.prs.map(p =>
       '<li><span class="kind">' + esc(p.repo) + '</span>' +
       '<a href="' + esc(safeUrl(p.url)) + '" target="_blank">!' + p.id + ' ' + esc(p.title) + '</a></li>'
     ).join('') + '</ul>';
+  }
+  // An older stop carries tiers and counts only; the stories and PRs live in
+  // that release's own report, which is a sibling file when it exists.
+  if (!own && det && currentView !== 'system') {
+    const report = historyReportFor(currentRelease);
+    h += '<h4>Stories and pull requests</h4><p class="empty">' + (report
+      ? 'Stories and pull requests are in the <a href="' + esc(report) + '">release ' +
+        esc(currentRelease) + ' report</a>.'
+      : 'Stories and pull requests are in the release ' + esc(currentRelease) +
+        ' report, which is not in this folder.') + '</p>';
   }
   if (currentView !== 'system' && stateOf(id) === 'peripheral') {
     const near = network.getConnectedNodes(id).filter(o => CHANGED.has(o));

@@ -562,3 +562,12 @@ def test_release_slider_swaps_tiers_and_reapplies_the_lens():
 def test_release_slider_is_skipped_when_history_is_false():
     html = _render()
     assert "DATA.history !== false" in html
+
+
+def test_detail_panel_links_to_the_older_release_report():
+    html = _render()
+    assert "Stories and pull requests are in the" in html
+    assert "which is not in this folder" in html
+    assert "historyReportFor(currentRelease)" in html
+    # links to sibling reports are plain relative hrefs, escaped
+    assert "esc(report)" in html
