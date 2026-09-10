@@ -1,0 +1,31 @@
+{
+ "changed": [
+  "fulfilment-worker-0",
+  "fulfilment-worker-1",
+  "notifications-worker-0",
+  "notifications-worker-1",
+  "returns-api-0",
+  "returns-api-1",
+  "shipping-api-0",
+  "shipping-api-1"
+ ],
+ "touched": [
+  "fulfilment-worker-2",
+  "notifications-worker-2",
+  "returns-api-3",
+  "shipping-api-3"
+ ],
+ "testOnly": [
+  "fulfilment-worker-4",
+  "notifications-worker-4",
+  "returns-api-4",
+  "shipping-api-4"
+ ],
+ "peripheralIncludes": [],
+ "untouchedDatabases": [
+  "fulfilment-worker-3",
+  "notifications-worker-3",
+  "returns-api-2",
+  "shipping-api-2"
+ ]
+}

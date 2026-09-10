@@ -1,0 +1,30 @@
+{
+ "changed": [
+  "catalog-api-0",
+  "catalog-api-1",
+  "catalog-web-0",
+  "catalog-web-1",
+  "pricing-api-0",
+  "pricing-api-1",
+  "search-api-0",
+  "search-api-1"
+ ],
+ "touched": [
+  "catalog-api-3",
+  "catalog-web-2",
+  "pricing-api-3",
+  "search-api-3"
+ ],
+ "testOnly": [
+  "catalog-api-4",
+  "catalog-web-3",
+  "pricing-api-4",
+  "search-api-4"
+ ],
+ "peripheralIncludes": [],
+ "untouchedDatabases": [
+  "catalog-api-2",
+  "pricing-api-2",
+  "search-api-2"
+ ]
+}

@@ -1,0 +1,235 @@
+{
+ "release": "1.2",
+ "query": "release-1.2",
+ "fetched_at": "2026-09-16T09:00:00Z",
+ "skipped": [],
+ "work_items": [
+  {
+   "id": 42401,
+   "type": "User Story",
+   "title": "Billing.Api: release 1.2 feature work",
+   "url": "https://tracker.example/workitems/42401",
+   "prs": [
+    {
+     "id": 1701,
+     "title": "Billing.Api handlers and validation",
+     "repo": "Billing.Api",
+     "url": "https://tracker.example/billing-api/pullrequest/1701",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1702,
+     "title": "Billing.Api options tidy-up",
+     "repo": "Billing.Api",
+     "url": "https://tracker.example/billing-api/pullrequest/1702",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1703,
+     "title": "Billing.Api regression tests",
+     "repo": "Billing.Api",
+     "url": "https://tracker.example/billing-api/pullrequest/1703",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1704,
+     "title": "Billing.Api repository tidy-up",
+     "repo": "Billing.Api",
+     "url": "https://tracker.example/billing-api/pullrequest/1704",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42402,
+   "type": "User Story",
+   "title": "Tax.Api: release 1.2 feature work",
+   "url": "https://tracker.example/workitems/42402",
+   "prs": [
+    {
+     "id": 1705,
+     "title": "Tax.Api handlers and validation",
+     "repo": "Tax.Api",
+     "url": "https://tracker.example/tax-api/pullrequest/1705",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1706,
+     "title": "Tax.Api options tidy-up",
+     "repo": "Tax.Api",
+     "url": "https://tracker.example/tax-api/pullrequest/1706",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1707,
+     "title": "Tax.Api regression tests",
+     "repo": "Tax.Api",
+     "url": "https://tracker.example/tax-api/pullrequest/1707",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1708,
+     "title": "Tax.Api repository tidy-up",
+     "repo": "Tax.Api",
+     "url": "https://tracker.example/tax-api/pullrequest/1708",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42403,
+   "type": "User Story",
+   "title": "Payments.Gateway: release 1.2 feature work",
+   "url": "https://tracker.example/workitems/42403",
+   "prs": [
+    {
+     "id": 1709,
+     "title": "Payments.Gateway handlers and validation",
+     "repo": "Payments.Gateway",
+     "url": "https://tracker.example/payments-gateway/pullrequest/1709",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/events-schema/Handler.cs",
+      "/src/events-schema/Validator.cs",
+      "/src/events-schema/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1710,
+     "title": "Payments.Gateway options tidy-up",
+     "repo": "Payments.Gateway",
+     "url": "https://tracker.example/payments-gateway/pullrequest/1710",
+     "status": "completed",
+     "files": [
+      "/src/connector/Handler.cs"
+     ]
+    },
+    {
+     "id": 1711,
+     "title": "Payments.Gateway regression tests",
+     "repo": "Payments.Gateway",
+     "url": "https://tracker.example/payments-gateway/pullrequest/1711",
+     "status": "completed",
+     "files": [
+      "/tests/domain-model/HandlerTests.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42404,
+   "type": "User Story",
+   "title": "Reporting.Worker: release 1.2 feature work",
+   "url": "https://tracker.example/workitems/42404",
+   "prs": [
+    {
+     "id": 1712,
+     "title": "Reporting.Worker handlers and validation",
+     "repo": "Reporting.Worker",
+     "url": "https://tracker.example/reporting-worker/pullrequest/1712",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs",
+      "/src/core/Validator.cs",
+      "/src/core/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1713,
+     "title": "Reporting.Worker options tidy-up",
+     "repo": "Reporting.Worker",
+     "url": "https://tracker.example/reporting-worker/pullrequest/1713",
+     "status": "completed",
+     "files": [
+      "/src/events-topic/Handler.cs"
+     ]
+    },
+    {
+     "id": 1714,
+     "title": "Reporting.Worker regression tests",
+     "repo": "Reporting.Worker",
+     "url": "https://tracker.example/reporting-worker/pullrequest/1714",
+     "status": "completed",
+     "files": [
+      "/tests/connector/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1715,
+     "title": "Reporting.Worker repository tidy-up",
+     "repo": "Reporting.Worker",
+     "url": "https://tracker.example/reporting-worker/pullrequest/1715",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42405,
+   "type": "Task",
+   "title": "Release notes for 1.2",
+   "url": "https://tracker.example/workitems/42405",
+   "prs": []
+  },
+  {
+   "id": 42406,
+   "type": "Task",
+   "title": "Dependency bump for 1.2",
+   "url": "https://tracker.example/workitems/42406",
+   "prs": [
+    {
+     "id": 1716,
+     "title": "Bump packages",
+     "repo": "Billing.Api",
+     "url": "https://tracker.example/billing-api/pullrequest/1716",
+     "status": "completed",
+     "files": [
+      "/packages.lock.json"
+     ]
+    }
+   ]
+  }
+ ]
+}

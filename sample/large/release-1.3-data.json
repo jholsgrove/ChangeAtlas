@@ -1,0 +1,245 @@
+{
+ "release": "1.3",
+ "query": "release-1.3",
+ "fetched_at": "2026-09-23T09:00:00Z",
+ "skipped": [],
+ "work_items": [
+  {
+   "id": 42501,
+   "type": "User Story",
+   "title": "Shipping.Api: release 1.3 feature work",
+   "url": "https://tracker.example/workitems/42501",
+   "prs": [
+    {
+     "id": 1801,
+     "title": "Shipping.Api handlers and validation",
+     "repo": "Shipping.Api",
+     "url": "https://tracker.example/shipping-api/pullrequest/1801",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1802,
+     "title": "Shipping.Api options tidy-up",
+     "repo": "Shipping.Api",
+     "url": "https://tracker.example/shipping-api/pullrequest/1802",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1803,
+     "title": "Shipping.Api regression tests",
+     "repo": "Shipping.Api",
+     "url": "https://tracker.example/shipping-api/pullrequest/1803",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1804,
+     "title": "Shipping.Api repository tidy-up",
+     "repo": "Shipping.Api",
+     "url": "https://tracker.example/shipping-api/pullrequest/1804",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42502,
+   "type": "User Story",
+   "title": "Fulfilment.Worker: release 1.3 feature work",
+   "url": "https://tracker.example/workitems/42502",
+   "prs": [
+    {
+     "id": 1805,
+     "title": "Fulfilment.Worker handlers and validation",
+     "repo": "Fulfilment.Worker",
+     "url": "https://tracker.example/fulfilment-worker/pullrequest/1805",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs",
+      "/src/core/Validator.cs",
+      "/src/core/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1806,
+     "title": "Fulfilment.Worker options tidy-up",
+     "repo": "Fulfilment.Worker",
+     "url": "https://tracker.example/fulfilment-worker/pullrequest/1806",
+     "status": "completed",
+     "files": [
+      "/src/events-topic/Handler.cs"
+     ]
+    },
+    {
+     "id": 1807,
+     "title": "Fulfilment.Worker regression tests",
+     "repo": "Fulfilment.Worker",
+     "url": "https://tracker.example/fulfilment-worker/pullrequest/1807",
+     "status": "completed",
+     "files": [
+      "/tests/connector/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1808,
+     "title": "Fulfilment.Worker repository tidy-up",
+     "repo": "Fulfilment.Worker",
+     "url": "https://tracker.example/fulfilment-worker/pullrequest/1808",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42503,
+   "type": "User Story",
+   "title": "Returns.Api: release 1.3 feature work",
+   "url": "https://tracker.example/workitems/42503",
+   "prs": [
+    {
+     "id": 1809,
+     "title": "Returns.Api handlers and validation",
+     "repo": "Returns.Api",
+     "url": "https://tracker.example/returns-api/pullrequest/1809",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1810,
+     "title": "Returns.Api options tidy-up",
+     "repo": "Returns.Api",
+     "url": "https://tracker.example/returns-api/pullrequest/1810",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1811,
+     "title": "Returns.Api regression tests",
+     "repo": "Returns.Api",
+     "url": "https://tracker.example/returns-api/pullrequest/1811",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1812,
+     "title": "Returns.Api repository tidy-up",
+     "repo": "Returns.Api",
+     "url": "https://tracker.example/returns-api/pullrequest/1812",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42504,
+   "type": "User Story",
+   "title": "Notifications.Worker: release 1.3 feature work",
+   "url": "https://tracker.example/workitems/42504",
+   "prs": [
+    {
+     "id": 1813,
+     "title": "Notifications.Worker handlers and validation",
+     "repo": "Notifications.Worker",
+     "url": "https://tracker.example/notifications-worker/pullrequest/1813",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs",
+      "/src/core/Validator.cs",
+      "/src/core/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1814,
+     "title": "Notifications.Worker options tidy-up",
+     "repo": "Notifications.Worker",
+     "url": "https://tracker.example/notifications-worker/pullrequest/1814",
+     "status": "completed",
+     "files": [
+      "/src/events-topic/Handler.cs"
+     ]
+    },
+    {
+     "id": 1815,
+     "title": "Notifications.Worker regression tests",
+     "repo": "Notifications.Worker",
+     "url": "https://tracker.example/notifications-worker/pullrequest/1815",
+     "status": "completed",
+     "files": [
+      "/tests/connector/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1816,
+     "title": "Notifications.Worker repository tidy-up",
+     "repo": "Notifications.Worker",
+     "url": "https://tracker.example/notifications-worker/pullrequest/1816",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42505,
+   "type": "Task",
+   "title": "Release notes for 1.3",
+   "url": "https://tracker.example/workitems/42505",
+   "prs": []
+  },
+  {
+   "id": 42506,
+   "type": "Task",
+   "title": "Dependency bump for 1.3",
+   "url": "https://tracker.example/workitems/42506",
+   "prs": [
+    {
+     "id": 1817,
+     "title": "Bump packages",
+     "repo": "Shipping.Api",
+     "url": "https://tracker.example/shipping-api/pullrequest/1817",
+     "status": "completed",
+     "files": [
+      "/packages.lock.json"
+     ]
+    }
+   ]
+  }
+ ]
+}

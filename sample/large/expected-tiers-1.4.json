@@ -1,0 +1,30 @@
+{
+ "changed": [
+  "loyalty-api-0",
+  "loyalty-api-1",
+  "promotions-web-0",
+  "promotions-web-1",
+  "reviews-api-0",
+  "reviews-api-1",
+  "support-api-0",
+  "support-api-1"
+ ],
+ "touched": [
+  "loyalty-api-3",
+  "promotions-web-2",
+  "reviews-api-3",
+  "support-api-3"
+ ],
+ "testOnly": [
+  "loyalty-api-4",
+  "promotions-web-3",
+  "reviews-api-4",
+  "support-api-4"
+ ],
+ "peripheralIncludes": [],
+ "untouchedDatabases": [
+  "loyalty-api-2",
+  "reviews-api-2",
+  "support-api-2"
+ ]
+}

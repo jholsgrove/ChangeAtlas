@@ -15,8 +15,11 @@ from changeatlas.__main__ import main
 
 BASE = Path(__file__).resolve().parent.parent
 LARGE = BASE / "sample" / "large"
-FILES = ("graph-data.json", "component-globs.json", "release-1.0-data.json",
-         "expected-tiers.json")
+FILES = ("graph-data.json", "component-globs.json",
+         *[f"release-{lbl}-data.json" for lbl in ("1.0", "1.1", "1.2", "1.3", "1.4")],
+         *[f"expected-tiers-{lbl}.json" for lbl in ("1.0", "1.1", "1.2", "1.3", "1.4")])
+LABELS = ("1.0", "1.1", "1.2", "1.3", "1.4")
+SERIES = BASE / "out" / "sample-large"
 
 
 def _load_generator():
@@ -48,7 +51,7 @@ def test_large_sample_shape():
     for n in graph["nodes"]:
         assert set(n) == {"id", "title", "type", "repo", "summary", "tags"}, n["id"]
     total = sum((LARGE / f).stat().st_size for f in FILES)
-    assert total <= 1_000_000, total
+    assert total <= 1_500_000, total
 
 
 def test_large_sample_check_map_is_clean(capsys):
@@ -58,29 +61,44 @@ def test_large_sample_check_map_is_clean(capsys):
     assert "clean" in out
 
 
+def _payload(label):
+    html = (SERIES / f"impact-{label}.html").read_text(encoding="utf-8")
+    prefix = "const DATA = "
+    start = html.index(prefix) + len(prefix)
+    data, _ = json.JSONDecoder().raw_decode(html[start:])
+    return html, data
+
+
 def test_large_sample_golden_tiers(capsys):
     rc = main(["--sample", "large", "--base-dir", str(BASE)])
     assert rc == 0
     out = capsys.readouterr().out
-    html = (BASE / "out" / "sample-large" / "impact-1.0.html").read_text(encoding="utf-8")
-    assert len(html) <= 3_000_000
-
-    prefix = "const DATA = "
-    start = html.index(prefix) + len(prefix)
-    data, _ = json.JSONDecoder().raw_decode(html[start:])
-    expected = json.loads((LARGE / "expected-tiers.json").read_text(encoding="utf-8"))
-
-    assert sorted(data["impact"]["changed"]) == sorted(expected["changed"])
-    assert sorted(data["impact"]["touched"]) == sorted(expected["touched"])
-    assert sorted(data["impact"]["testOnly"]) == sorted(expected["testOnly"])
-    assert set(expected["peripheralIncludes"]) <= set(data["impact"]["peripheral"])
-    tiered = set(data["impact"]["changed"]) | set(data["impact"]["touched"]) \
-        | set(data["impact"]["testOnly"]) | set(data["impact"]["peripheral"])
-    for db in expected["untouchedDatabases"]:
-        assert db not in tiered, db
-
-    assert data["groupThreshold"] == 150
-    assert "tracker.example" in html
+    for label in LABELS:
+        html, data = _payload(label)
+        assert len(html) <= 3_000_000
+        expected = json.loads((LARGE / f"expected-tiers-{label}.json").read_text(encoding="utf-8"))
+        assert sorted(data["impact"]["changed"]) == sorted(expected["changed"]), label
+        assert sorted(data["impact"]["touched"]) == sorted(expected["touched"]), label
+        assert sorted(data["impact"]["testOnly"]) == sorted(expected["testOnly"]), label
+        assert set(expected["peripheralIncludes"]) <= set(data["impact"]["peripheral"]), label
+        tiered = set(data["impact"]["changed"]) | set(data["impact"]["touched"]) \
+            | set(data["impact"]["testOnly"]) | set(data["impact"]["peripheral"])
+        for db in expected["untouchedDatabases"]:
+            assert db not in tiered, (label, db)
+        assert data["groupThreshold"] == 150
+        assert "tracker.example" in html
     assert re.search(r"\d+ dependency/NuGet manifest file\(s\) ignored", out)
     assert "work item(s) with no linked PRs" in out
     assert "Unmatched files" not in out
+    manifest = (SERIES / "releases.js").read_text(encoding="utf-8")
+    entries = json.loads(manifest[len("window.CHANGEATLAS_RELEASES = "):].rstrip(";\n"))
+    assert [e["label"] for e in entries] == list(LABELS)      # exactly the cap of five
+
+
+def test_later_releases_land_in_different_repos():
+    seen = []
+    for label in LABELS:
+        exp = json.loads((LARGE / f"expected-tiers-{label}.json").read_text(encoding="utf-8"))
+        seen.append(set(exp["changed"]))
+    for a, b in zip(seen, seen[1:], strict=False):
+        assert a != b                       # the shading visibly moves between stops
