@@ -14,6 +14,7 @@ plus the graph, so an atlas change never leaves stale ids behind.
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import impact
@@ -21,6 +22,7 @@ from . import impact
 HISTORY_LIMIT = 5
 MANIFEST_NAME = "releases.js"
 _CACHE_RE = re.compile(r"^release-(.+)-data\.json$")
+_LABEL_RE = re.compile(r"[A-Za-z0-9._+-]{1,64}")
 
 
 @dataclass(frozen=True)
@@ -30,12 +32,31 @@ class Release:
     path: Path
 
 
+def _instant(value: str):
+    """A comparable instant for an ISO 8601 `fetched_at`, string fallback.
+
+    `datetime.fromisoformat` only accepts a trailing 'Z' from Python 3.11;
+    this project supports 3.10, hence the replace. A naive result (no
+    offset in the string) is assumed UTC so it can be compared against aware
+    ones. Real timestamps (tag 0) always sort before an unparseable string
+    (tag 1, sorted by its own text) rather than raising.
+    """
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return (1, value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (0, dt)
+
+
 def discover(cache_dir: Path) -> tuple[list[Release], list[str]]:
     """Every release-*-data.json in cache_dir, oldest fetch first.
 
     Returns (releases, warnings). An unreadable or shapeless file becomes a
     warning line rather than an exception: one bad cache must never stop the
-    requested render.
+    requested render. A label that would be unsafe as a filename (anything
+    outside `[A-Za-z0-9._+-]`, or too long) is skipped the same way.
     """
     cache_dir = Path(cache_dir)
     if not cache_dir.is_dir():
@@ -51,8 +72,11 @@ def discover(cache_dir: Path) -> tuple[list[Release], list[str]]:
         except (OSError, ValueError, KeyError, TypeError) as exc:
             warnings.append(f"history: skipped {p.name} ({exc.__class__.__name__}: {exc})")
             continue
+        if not _LABEL_RE.fullmatch(label):
+            warnings.append(f"history: skipped {p.name} (unsafe release label: {label!r})")
+            continue
         releases.append(Release(label=label, fetched_at=fetched_at, path=p))
-    releases.sort(key=lambda r: (r.fetched_at, r.label))
+    releases.sort(key=lambda r: (_instant(r.fetched_at), r.label))
     return releases, warnings
 
 

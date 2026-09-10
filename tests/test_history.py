@@ -40,6 +40,37 @@ def test_discover_ignores_non_release_files_and_missing_dir(tmp_path):
     assert history.discover(tmp_path / "nope") == ([], [])
 
 
+def test_discover_orders_by_instant_not_string_across_offsets(tmp_path):
+    # ISO 8601 only sorts lexicographically when every value shares the same
+    # form and offset. 'b' and 'c' are the same UTC instant (2026-02-28T23:00Z),
+    # both earlier than 'a' (2026-03-01T00:00Z) -- but a naive string sort of
+    # the raw text orders them "c", "a", "b" (it thinks 'a' is earlier than
+    # 'b' because "00:00:00Z" < "01:00:00+02:00" lexically). The instant-based
+    # sort must put 'a' last.
+    _cache(tmp_path, "a", "2026-03-01T00:00:00Z")
+    _cache(tmp_path, "b", "2026-03-01T01:00:00+02:00")   # == 2026-02-28T23:00:00Z
+    _cache(tmp_path, "c", "2026-02-28T23:00:00+00:00")   # same instant as b
+    releases, warnings = history.discover(tmp_path)
+    labels = [r.label for r in releases]
+    assert labels[-1] == "a"                    # latest instant sorts last
+    assert set(labels[:-1]) == {"b", "c"}        # both equal-and-earlier instants sort first
+    assert warnings == []
+
+
+def test_discover_skips_unsafe_release_label_with_warning(tmp_path):
+    # The label comes from the JSON body, not the filename (see history.py's
+    # module docstring on _CACHE_RE), so a hand-built cache can disagree: the
+    # file matches the naming convention but the body's "release" is unsafe
+    # to use as a filename.
+    _cache(tmp_path, "1.0", "2026-01-01T00:00:00Z")
+    bad = tmp_path / "release-evil-data.json"
+    bad.write_text(json.dumps({"release": "../evil", "fetched_at": "2026-01-02T00:00:00Z"}),
+                   encoding="utf-8")
+    releases, warnings = history.discover(tmp_path)
+    assert [r.label for r in releases] == ["1.0"]
+    assert len(warnings) == 1 and bad.name in warnings[0]
+
+
 GRAPH = {"nodes": [
     {"id": "shop-web", "title": "Shop Web", "type": "repo", "repo": "shop-web", "summary": "s", "tags": []},
     {"id": "checkout-flow", "title": "Checkout", "type": "feature", "repo": "shop-web", "summary": "s", "tags": []},
