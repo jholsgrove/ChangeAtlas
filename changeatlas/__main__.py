@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 
-from . import anonymize, heuristics, impact, mapping, palette, render
+from . import anonymize, heuristics, history, impact, mapping, palette, render
 from .gatherers import ado
 
 _GUID_RE = re.compile(
@@ -52,6 +52,19 @@ def parse_query_id(value: str) -> str:
             "URL (…/_queries/query/<guid>/) or the GUID itself."
         )
     return m.group(1).lower()
+
+
+def _write_history(out_dir, cache_dir, graph, components, heur, changed_threshold):
+    """Sidecars for the five most recent caches in cache_dir, written to out_dir
+    beside the reports, plus the manifest. Recomputed against the current atlas
+    every time (impact.compute is pure over cached data + graph)."""
+    releases, warnings = history.discover(cache_dir)
+    warnings += history.write_series(
+        out_dir, releases,
+        lambda gathered: history.sidecar(gathered, components, graph["nodes"], graph["edges"],
+                                         heur, changed_threshold))
+    for w in warnings:
+        print(w, file=sys.stderr)
 
 
 def main(argv=None, fetch=ado.default_fetch) -> int:
@@ -222,6 +235,7 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
                    "testOnly": result["test_only"], "peripheral": result["peripheral"]},
         "details": result["details"],
         "groupThreshold": args.group_threshold,
+        "history": not args.anonymize,
     }
     if args.anonymize:
         payload = anonymize.anonymize_payload(payload)
@@ -234,6 +248,9 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
     final_out.parent.mkdir(parents=True, exist_ok=True)
     final_out.write_text(render.render(payload, PKG_DIR / "template.html", args.vis),
                          encoding="utf-8")
+
+    if not args.anonymize and not args.sample:
+        _write_history(base / "out", base / "out", graph, components, heur, args.changed_threshold)
 
     untouched = len(graph["nodes"]) - sum(
         len(result[k]) for k in ("changed", "touched", "test_only", "peripheral"))

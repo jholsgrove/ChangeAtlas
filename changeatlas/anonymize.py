@@ -95,4 +95,5 @@ def anonymize_payload(payload: dict) -> dict:
         "impact": {k: [id_map[i] for i in v]
                    for k, v in payload["impact"].items()},
         "details": new_details,
+        "history": False,
     }

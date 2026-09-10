@@ -329,3 +329,34 @@ def test_group_threshold_default_is_150(tmp_path):
     main(["--sample", "--base-dir", str(root), "--vis", str(root / "vis.js")])
     html = (root / "out" / "impact-sample.html").read_text(encoding="utf-8")
     assert '"groupThreshold": 150' in html
+
+
+# --- release history sidecars and manifest ----------------------------
+
+def test_real_render_writes_sidecar_and_manifest(tmp_path):
+    root, args = make_project(tmp_path)
+    (root / "out" / "release-1.0-data.json").write_text(json.dumps(CACHE), encoding="utf-8")
+    older = dict(CACHE, release="0.9", fetched_at="2025-12-01T00:00:00Z")
+    (root / "out" / "release-0.9-data.json").write_text(json.dumps(older), encoding="utf-8")
+    assert cli.main(args, fetch=lambda url: (_ for _ in ()).throw(AssertionError("no fetch"))) == 0
+    out = root / "out"
+    assert (out / "impact-1.0.history.js").exists()
+    assert (out / "impact-0.9.history.js").exists()
+    manifest = (out / "releases.js").read_text(encoding="utf-8")
+    entries = json.loads(manifest[len("window.CHANGEATLAS_RELEASES = "):].rstrip(";\n"))
+    assert [e["label"] for e in entries] == ["0.9", "1.0"]
+    assert entries[1]["report"] == "impact-1.0.html"
+    assert entries[0]["report"] is None            # 0.9 was never rendered
+    html = (out / "impact-1.0.html").read_text(encoding="utf-8")
+    assert '"history": true' in html
+    assert '<script src="releases.js"' in html
+
+
+def test_anonymized_render_writes_no_history_files(tmp_path):
+    root, args = make_project(tmp_path)
+    (root / "out" / "release-1.0-data.json").write_text(json.dumps(CACHE), encoding="utf-8")
+    assert cli.main(args + ["--anonymize"], fetch=None) == 0
+    out = root / "out"
+    assert not (out / "releases.js").exists()
+    assert not (out / "impact-1.0.history.js").exists()
+    assert '"history": false' in (out / "impact-1.0-anon.html").read_text(encoding="utf-8")
