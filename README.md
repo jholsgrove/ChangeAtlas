@@ -245,8 +245,8 @@ build artifact) and renders from there.
 At an older stop the map, legend counts and roll-up follow the slider. The
 detail panel shows the tier and change size and links to that release's own
 report for its stories and pull requests. List view and Export to Obsidian
-always show the report's own release. `--anonymize` writes no sidecar and
-reads no manifest.
+always show the report's own release. `--anonymize` writes no sidecar, does
+not rewrite the manifest, and the report ignores one it finds.
 
 ## Anonymised demos
 
@@ -259,7 +259,11 @@ generic node/story/PR names, and dead pull-request/work-item links on the
 reserved `.example` TLD (they look real on hover but can never resolve to,
 or leak, a real organisation). Topology, node types, tiers, and change
 sizes are preserved — this is for sharing a real release's *shape* without
-sharing its content. No history sidecar or manifest is written for an anonymised render, and the report does not load one, so nothing real sits beside it.
+sharing its content. An anonymised render writes no history sidecar and does
+not rewrite the manifest, and the anonymised report ignores any manifest it
+finds, so the single HTML file carries and shows nothing real. Earlier real
+renders' `release-*-data.json`, `impact-*.history.js` and `releases.js` may
+still be in the same `out/` folder, so share the one file, not the folder.
 
 ## License
 
