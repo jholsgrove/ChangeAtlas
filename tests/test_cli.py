@@ -301,11 +301,25 @@ def _stage_shop_sample(tmp_path):
     return tmp_path
 
 
-def test_bare_sample_still_renders_web_shop(tmp_path):
+def test_bare_sample_renders_every_release_into_series_dir(tmp_path):
     root = _stage_shop_sample(tmp_path)
+    older = json.loads((root / "sample" / "release-1.0-data.json").read_text(encoding="utf-8"))
+    older.update(release="0.9", fetched_at="2026-08-01T00:00:00+00:00")
+    (root / "sample" / "release-0.9-data.json").write_text(json.dumps(older), encoding="utf-8")
     rc = main(["--sample", "--base-dir", str(root), "--vis", str(root / "vis.js")])
     assert rc == 0
-    assert (root / "out" / "impact-sample.html").exists()
+    series = root / "out" / "sample"
+    assert (series / "impact-0.9.html").exists()
+    assert (series / "impact-1.0.html").exists()
+    assert (series / "impact-0.9.history.js").exists()
+    assert (series / "impact-1.0.history.js").exists()
+    entries = json.loads((series / "releases.js").read_text(encoding="utf-8")
+                         [len("window.CHANGEATLAS_RELEASES = "):].rstrip(";\n"))
+    assert [e["label"] for e in entries][:2] == ["0.9", "1.0"]
+    for e in entries:
+        assert e["report"] == f"impact-{e['label']}.html"
+        assert (series / e["history"]).exists()
+    assert not (root / "out" / "impact-sample.html").exists()
 
 
 def test_unknown_sample_name_lists_valid_names(tmp_path, capsys):
@@ -320,14 +334,14 @@ def test_group_threshold_reaches_payload(tmp_path):
     rc = main(["--sample", "--group-threshold", "7",
                "--base-dir", str(root), "--vis", str(root / "vis.js")])
     assert rc == 0
-    html = (root / "out" / "impact-sample.html").read_text(encoding="utf-8")
+    html = (root / "out" / "sample" / "impact-1.0.html").read_text(encoding="utf-8")
     assert '"groupThreshold": 7' in html
 
 
 def test_group_threshold_default_is_150(tmp_path):
     root = _stage_shop_sample(tmp_path)
     main(["--sample", "--base-dir", str(root), "--vis", str(root / "vis.js")])
-    html = (root / "out" / "impact-sample.html").read_text(encoding="utf-8")
+    html = (root / "out" / "sample" / "impact-1.0.html").read_text(encoding="utf-8")
     assert '"groupThreshold": 150' in html
 
 

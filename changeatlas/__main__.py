@@ -36,10 +36,12 @@ EDGE_LABEL = {
     "owns": "owns", "uses": "uses",
 }
 
-# Bundled fictional samples: name -> (directory under --base-dir, output file).
+# Bundled fictional samples: name -> (directory under --base-dir, series
+# directory under out/). A sample render writes one report per
+# release-*-data.json in its directory, so the demo has a slider to show.
 SAMPLES = {
-    "shop": {"dir": "sample", "out": "impact-sample.html"},
-    "large": {"dir": "sample/large", "out": "impact-sample-large.html"},
+    "shop": {"dir": "sample", "out_dir": "sample"},
+    "large": {"dir": "sample/large", "out_dir": "sample-large"},
 }
 
 
@@ -65,6 +67,55 @@ def _write_history(out_dir, cache_dir, graph, components, heur, changed_threshol
                                          heur, changed_threshold))
     for w in warnings:
         print(w, file=sys.stderr)
+
+
+def _render_one(release, gathered, graph, components, heur, args, out_dir):
+    """Compute one release's tiers, write its report, print the summary."""
+    result = impact.compute(gathered, components, graph["nodes"], graph["edges"], heur,
+                            changed_threshold=args.changed_threshold)
+    payload = {
+        "release": release,
+        "generated": date.today().isoformat(),
+        "nodes": graph["nodes"], "edges": graph["edges"],
+        "typeStyle": {t: {"label": label, "color": c} for t, (label, c) in TYPE_STYLE.items()},
+        "edgeLabel": EDGE_LABEL,
+        "impact": {"changed": result["changed"], "touched": result["touched"],
+                   "testOnly": result["test_only"], "peripheral": result["peripheral"]},
+        "details": result["details"],
+        "groupThreshold": args.group_threshold,
+        "history": not args.anonymize,
+    }
+    if args.anonymize:
+        payload = anonymize.anonymize_payload(payload)
+    suffix = "-anon" if args.anonymize else ""
+    final_out = out_dir / f"impact-{release}{suffix}.html"
+    final_out.parent.mkdir(parents=True, exist_ok=True)
+    final_out.write_text(render.render(payload, PKG_DIR / "template.html", args.vis),
+                         encoding="utf-8")
+
+    untouched = len(graph["nodes"]) - sum(
+        len(result[k]) for k in ("changed", "touched", "test_only", "peripheral"))
+    print(f"Wrote {final_out}")
+    print(f"{len(result['changed'])} changed · {len(result['touched'])} touched · "
+          f"{len(result['test_only'])} test-only · {len(result['peripheral'])} peripheral · "
+          f"{untouched} untouched")
+    if result["dependency_files_skipped"]:
+        print(f"{result['dependency_files_skipped']} dependency/NuGet manifest file(s) ignored")
+    no_code = [wi for wi in gathered["work_items"] if not wi["prs"]]
+    if no_code:
+        print(f"{len(no_code)} work item(s) with no linked PRs (no code change):")
+        for wi in no_code:
+            print(f"  #{wi['id']} {wi['title']}")
+    for note in gathered.get("skipped", []):
+        print(f"  skipped: {note}")
+    if result["unmatched_files"]:
+        print("Unmatched files (unknown repo or no glob at all):")
+        for f in result["unmatched_files"]:
+            print(f"  {f}")
+    if result["beyond_repo_files"]:
+        print("Unmapped beyond repo (extend config/component-globs.json):")
+        for f in result["beyond_repo_files"]:
+            print(f"  {f}")
 
 
 def main(argv=None, fetch=ado.default_fetch) -> int:
@@ -112,9 +163,8 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         sample_dir = base / SAMPLES[args.sample]["dir"]
         graph_path = sample_dir / "graph-data.json"
         map_path = sample_dir / "component-globs.json"
-        cache_path = sample_dir / "release-1.0-data.json"
-        release = "1.0"
-        out_path = base / "out" / SAMPLES[args.sample]["out"]
+        out_dir = base / "out" / SAMPLES[args.sample]["out_dir"]
+        release = None
     else:
         if not args.graph_data:
             print("--graph-data is required (or use --sample)", file=sys.stderr)
@@ -122,7 +172,7 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         graph_path = Path(args.graph_data)
         map_path = base / "config" / "component-globs.json"
         release = args.release
-        out_path = None      # computed later, once we know we're actually rendering
+        out_dir = base / "out"
 
     if not graph_path.exists():
         print(f"graph data not found: {graph_path}", file=sys.stderr)
@@ -149,30 +199,54 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         print("component map errors (run --check-map):", *errors, sep="\n  ", file=sys.stderr)
         return 1
 
-    if not args.sample:
-        if not release:
-            print("--release is required (or use --check-map / --sample)",
+    try:
+        heur = heuristics.load(args.heuristics, base)
+    except ValueError as first_exc:
+        # A preset name (not an explicit path) may simply not exist under a
+        # non-default --base-dir (e.g. a test fixture, or a --base-dir that
+        # only holds project-specific config). Fall back to the package's
+        # own bundled presets (config/heuristics/) before giving up.
+        try:
+            heur = heuristics.load(args.heuristics, BASE_DIR)
+        except ValueError:
+            print(first_exc, file=sys.stderr)
+            return 1
+
+    if args.sample:
+        # --sample never touches ADO: every bundled cache in the directory is
+        # rendered, oldest fetch first, so the series has a slider to show.
+        releases, warnings = history.discover(sample_dir)
+        for w in warnings:
+            print(w, file=sys.stderr)
+        if not releases:
+            print(f"no release-*-data.json in {sample_dir}", file=sys.stderr)
+            return 1
+        for rel in releases:
+            print(f"Using cached ADO data: {rel.path}")
+            gathered = json.loads(rel.path.read_text(encoding="utf-8"))
+            _render_one(rel.label, gathered, graph, components, heur, args, out_dir)
+        _write_history(out_dir, sample_dir, graph, components, heur, args.changed_threshold)
+        return 0
+
+    if not release:
+        print("--release is required (or use --check-map / --sample)", file=sys.stderr)
+        return 2
+    cache_path = out_dir / f"release-{release}-data.json"
+    use_cache = cache_path.exists() and not args.refresh
+    # --query (and the ADO fetch it drives) is only needed when there's
+    # no cache to read — a hand-built release-data.json (e.g. from a
+    # custom gatherer, see prompts/build-gatherer.md) never needs it.
+    query_id = None
+    if not use_cache:
+        if not args.query:
+            print(f"--query is required to fetch (no cache found at {cache_path})",
                   file=sys.stderr)
             return 2
-        cache_path = base / "out" / f"release-{release}-data.json"
-        use_cache = cache_path.exists() and not args.refresh
-        # --query (and the ADO fetch it drives) is only needed when there's
-        # no cache to read — a hand-built release-data.json (e.g. from a
-        # custom gatherer, see prompts/build-gatherer.md) never needs it.
-        query_id = None
-        if not use_cache:
-            if not args.query:
-                print(f"--query is required to fetch (no cache found at {cache_path})",
-                      file=sys.stderr)
-                return 2
-            try:
-                query_id = parse_query_id(args.query)
-            except ValueError as exc:
-                print(exc, file=sys.stderr)
-                return 1
-    else:
-        # --sample never touches ADO: the bundled cache is always used.
-        use_cache = True
+        try:
+            query_id = parse_query_id(args.query)
+        except ValueError as exc:
+            print(exc, file=sys.stderr)
+            return 1
 
     if use_cache:
         print(f"Using cached ADO data: {cache_path} (--refresh to re-fetch)")
@@ -209,72 +283,9 @@ def main(argv=None, fetch=ado.default_fetch) -> int:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(gathered, indent=1), encoding="utf-8")
 
-    try:
-        heur = heuristics.load(args.heuristics, base)
-    except ValueError as first_exc:
-        # A preset name (not an explicit path) may simply not exist under a
-        # non-default --base-dir (e.g. a test fixture, or a --base-dir that
-        # only holds project-specific config). Fall back to the package's
-        # own bundled presets (config/heuristics/) before giving up.
-        try:
-            heur = heuristics.load(args.heuristics, BASE_DIR)
-        except ValueError:
-            print(first_exc, file=sys.stderr)
-            return 1
-
-    result = impact.compute(gathered, components, graph["nodes"], graph["edges"], heur,
-                            changed_threshold=args.changed_threshold)
-
-    payload = {
-        "release": release,
-        "generated": date.today().isoformat(),
-        "nodes": graph["nodes"], "edges": graph["edges"],
-        "typeStyle": {t: {"label": label, "color": c} for t, (label, c) in TYPE_STYLE.items()},
-        "edgeLabel": EDGE_LABEL,
-        "impact": {"changed": result["changed"], "touched": result["touched"],
-                   "testOnly": result["test_only"], "peripheral": result["peripheral"]},
-        "details": result["details"],
-        "groupThreshold": args.group_threshold,
-        "history": not args.anonymize,
-    }
-    if args.anonymize:
-        payload = anonymize.anonymize_payload(payload)
-
-    if args.sample:
-        final_out = out_path
-    else:
-        suffix = "-anon" if args.anonymize else ""
-        final_out = base / "out" / f"impact-{release}{suffix}.html"
-    final_out.parent.mkdir(parents=True, exist_ok=True)
-    final_out.write_text(render.render(payload, PKG_DIR / "template.html", args.vis),
-                         encoding="utf-8")
-
-    if not args.anonymize and not args.sample:
-        _write_history(base / "out", base / "out", graph, components, heur, args.changed_threshold)
-
-    untouched = len(graph["nodes"]) - sum(
-        len(result[k]) for k in ("changed", "touched", "test_only", "peripheral"))
-    print(f"Wrote {final_out}")
-    print(f"{len(result['changed'])} changed · {len(result['touched'])} touched · "
-          f"{len(result['test_only'])} test-only · {len(result['peripheral'])} peripheral · "
-          f"{untouched} untouched")
-    if result["dependency_files_skipped"]:
-        print(f"{result['dependency_files_skipped']} dependency/NuGet manifest file(s) ignored")
-    no_code = [wi for wi in gathered["work_items"] if not wi["prs"]]
-    if no_code:
-        print(f"{len(no_code)} work item(s) with no linked PRs (no code change):")
-        for wi in no_code:
-            print(f"  #{wi['id']} {wi['title']}")
-    for note in gathered.get("skipped", []):
-        print(f"  skipped: {note}")
-    if result["unmatched_files"]:
-        print("Unmatched files (unknown repo or no glob at all):")
-        for f in result["unmatched_files"]:
-            print(f"  {f}")
-    if result["beyond_repo_files"]:
-        print("Unmapped beyond repo (extend config/component-globs.json):")
-        for f in result["beyond_repo_files"]:
-            print(f"  {f}")
+    _render_one(release, gathered, graph, components, heur, args, out_dir)
+    if not args.anonymize:
+        _write_history(out_dir, out_dir, graph, components, heur, args.changed_threshold)
     return 0
 
 

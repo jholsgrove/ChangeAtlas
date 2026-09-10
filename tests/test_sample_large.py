@@ -62,7 +62,7 @@ def test_large_sample_golden_tiers(capsys):
     rc = main(["--sample", "large", "--base-dir", str(BASE)])
     assert rc == 0
     out = capsys.readouterr().out
-    html = (BASE / "out" / "impact-sample-large.html").read_text(encoding="utf-8")
+    html = (BASE / "out" / "sample-large" / "impact-1.0.html").read_text(encoding="utf-8")
     assert len(html) <= 3_000_000
 
     prefix = "const DATA = "

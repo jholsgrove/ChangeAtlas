@@ -63,7 +63,7 @@ def report_url(tmp_path_factory):
         if f.is_file():
             (base / "sample" / f.name).write_bytes(f.read_bytes())
     assert main(["--sample", "--base-dir", str(base)]) == 0
-    return (base / "out" / "impact-sample.html").resolve().as_uri()
+    return (base / "out" / "sample" / "impact-1.0.html").resolve().as_uri()
 
 
 @pytest.fixture(scope="module")
@@ -72,7 +72,7 @@ def large_report_url(tmp_path_factory):
     base = tmp_path_factory.mktemp("large")
     shutil.copytree(BASE / "sample", base / "sample")
     assert main(["--sample", "large", "--base-dir", str(base)]) == 0
-    return (base / "out" / "impact-sample-large.html").resolve().as_uri()
+    return (base / "out" / "sample-large" / "impact-1.0.html").resolve().as_uri()
 
 
 @pytest.fixture

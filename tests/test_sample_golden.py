@@ -26,7 +26,7 @@ def test_sample_end_to_end(capsys):
     rc = main(["--sample", "--base-dir", str(BASE)])
     assert rc == 0
 
-    html = (BASE / "out" / "impact-sample.html").read_text(encoding="utf-8")
+    html = (BASE / "out" / "sample" / "impact-1.0.html").read_text(encoding="utf-8")
     out = capsys.readouterr().out
 
     # Tier counts: designed truth per the controller ruling (not the brief's
