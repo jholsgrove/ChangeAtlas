@@ -16,6 +16,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import impact
+
 HISTORY_LIMIT = 5
 MANIFEST_NAME = "releases.js"
 _CACHE_RE = re.compile(r"^release-(.+)-data\.json$")
@@ -52,3 +54,59 @@ def discover(cache_dir: Path) -> tuple[list[Release], list[str]]:
         releases.append(Release(label=label, fetched_at=fetched_at, path=p))
     releases.sort(key=lambda r: (r.fetched_at, r.label))
     return releases, warnings
+
+
+def sidecar_name(label: str) -> str:
+    return f"impact-{label}.history.js"
+
+
+def report_name(label: str) -> str:
+    return f"impact-{label}.html"
+
+
+def sidecar(gathered: dict, components: list, nodes: list, edges: list, heur,
+            changed_threshold: int = 3) -> dict:
+    """Tier lists and per-node file counts for one release. Node ids only."""
+    r = impact.compute(gathered, components, nodes, edges, heur,
+                       changed_threshold=changed_threshold)
+    return {
+        "impact": {"changed": r["changed"], "touched": r["touched"],
+                   "testOnly": r["test_only"], "peripheral": r["peripheral"]},
+        "counts": {nid: {"prodFiles": d["prodFiles"], "testFiles": d["testFiles"]}
+                   for nid, d in sorted(r["details"].items())},
+    }
+
+
+def _js(value) -> str:
+    # '<\/' keeps a stray '</script>' inert should anyone inline this file.
+    return json.dumps(value, ensure_ascii=False).replace("</", "<\\/")
+
+
+def write_series(out_dir: Path, releases: list[Release], compute) -> list[str]:
+    """Write sidecars for the HISTORY_LIMIT most recent releases and the manifest.
+
+    `compute(gathered) -> sidecar dict` is supplied by the caller so this
+    module never needs the graph, globs or heuristics itself.
+    """
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    window = releases[-HISTORY_LIMIT:]
+    entries, warnings = [], []
+    for rel in window:
+        try:
+            gathered = json.loads(rel.path.read_text(encoding="utf-8"))
+            side = compute(gathered)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            warnings.append(f"history: skipped {rel.path.name} ({exc.__class__.__name__}: {exc})")
+            continue
+        (out_dir / sidecar_name(rel.label)).write_text(
+            "window.CHANGEATLAS_HISTORY = window.CHANGEATLAS_HISTORY || {};\n"
+            f"window.CHANGEATLAS_HISTORY[{_js(rel.label)}] = {_js(side)};\n",
+            encoding="utf-8")
+        report = report_name(rel.label)
+        entries.append({"label": rel.label, "fetchedAt": rel.fetched_at,
+                        "history": sidecar_name(rel.label),
+                        "report": report if (out_dir / report).exists() else None})
+    (out_dir / MANIFEST_NAME).write_text(
+        f"window.CHANGEATLAS_RELEASES = {_js(entries)};\n", encoding="utf-8")
+    return warnings

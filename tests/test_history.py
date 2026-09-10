@@ -38,3 +38,97 @@ def test_discover_ignores_non_release_files_and_missing_dir(tmp_path):
     releases, _ = history.discover(tmp_path)
     assert [r.label for r in releases] == ["1.0"]
     assert history.discover(tmp_path / "nope") == ([], [])
+
+
+GRAPH = {"nodes": [
+    {"id": "shop-web", "title": "Shop Web", "type": "repo", "repo": "shop-web", "summary": "s", "tags": []},
+    {"id": "checkout-flow", "title": "Checkout", "type": "feature", "repo": "shop-web", "summary": "s", "tags": []},
+    {"id": "orders-api", "title": "Orders", "type": "service", "repo": "shop-web", "summary": "s", "tags": []},
+], "edges": [
+    {"from": "shop-web", "to": "checkout-flow", "kind": "contains"},
+    {"from": "checkout-flow", "to": "orders-api", "kind": "http"},
+]}
+COMPONENTS = [
+    {"id": "shop-web", "repo": "shop-web", "globs": ["**"]},
+    {"id": "checkout-flow", "repo": "shop-web", "globs": ["**/checkout/**"]},
+    {"id": "orders-api", "repo": "shop-web", "globs": ["**/orders/**"]},
+]
+
+
+class _Heur:
+    def is_dependency_file(self, p): return p.endswith("package-lock.json")
+    def is_test_file(self, p): return "/tests/" in p or ".test." in p
+    def is_schema_file(self, p): return p.endswith(".sql")
+
+
+def _load_components():
+    import json as _json
+    import tempfile
+
+    from changeatlas import mapping
+
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "component-globs.json"
+        p.write_text(_json.dumps({"components": COMPONENTS}), encoding="utf-8")
+        return mapping.load_map(p)
+
+
+def _compute(gathered):
+    return history.sidecar(gathered, _load_components(), GRAPH["nodes"], GRAPH["edges"], _Heur(), 3)
+
+
+def test_sidecar_has_tiers_and_counts_only():
+    gathered = json.loads(_cache(Path(__import__("tempfile").mkdtemp()), "1.0", "2026-01-01T00:00:00Z",
+                          files=("/src/checkout/A.ts", "/src/checkout/B.ts", "/src/checkout/C.ts",
+                                 "/src/checkout/tests/A.test.ts")).read_text(encoding="utf-8"))
+    side = _compute(gathered)
+    assert set(side) == {"impact", "counts"}
+    assert set(side["impact"]) == {"changed", "touched", "testOnly", "peripheral"}
+    assert side["impact"]["changed"] == ["checkout-flow"]
+    assert side["impact"]["peripheral"] == ["orders-api"]
+    assert side["counts"] == {"checkout-flow": {"prodFiles": 3, "testFiles": 1}}
+    blob = json.dumps(side)
+    for secret in ("tracker", "title", "url", "stories", "prs", "https://"):
+        assert secret not in blob, secret
+
+
+def test_write_series_caps_at_five_most_recent_and_writes_manifest(tmp_path):
+    out = tmp_path / "out"
+    for i in range(7):   # labels 1.0 .. 1.6, fetched a day apart
+        _cache(out, f"1.{i}", f"2026-01-0{i + 1}T00:00:00Z")
+    (out / "impact-1.6.html").write_text("<html>", encoding="utf-8")   # only the newest has a report
+    releases, _ = history.discover(out)
+    warnings = history.write_series(out, releases, _compute)
+    assert warnings == []
+    manifest = (out / "releases.js").read_text(encoding="utf-8")
+    assert manifest.startswith("window.CHANGEATLAS_RELEASES = ")
+    entries = json.loads(manifest[len("window.CHANGEATLAS_RELEASES = "):].rstrip(";\n"))
+    assert [e["label"] for e in entries] == ["1.2", "1.3", "1.4", "1.5", "1.6"]
+    assert entries[-1] == {"label": "1.6", "fetchedAt": "2026-01-07T00:00:00Z",
+                           "history": "impact-1.6.history.js", "report": "impact-1.6.html"}
+    assert entries[0]["report"] is None
+    for e in entries:
+        assert (out / e["history"]).exists()
+    assert not (out / "impact-1.0.history.js").exists()
+    assert not (out / "impact-1.1.history.js").exists()
+
+
+def test_sidecar_file_is_a_script_that_registers_its_label(tmp_path):
+    out = tmp_path / "out"
+    _cache(out, "26.8", "2026-02-01T00:00:00Z")
+    releases, _ = history.discover(out)
+    history.write_series(out, releases, _compute)
+    js = (out / "impact-26.8.history.js").read_text(encoding="utf-8")
+    assert js.startswith("window.CHANGEATLAS_HISTORY = window.CHANGEATLAS_HISTORY || {};\n")
+    assert 'window.CHANGEATLAS_HISTORY["26.8"] = ' in js
+    assert "</" not in js.replace("<\\/", "")   # never terminates a script block if inlined
+
+
+def test_write_series_with_one_release_still_writes_manifest(tmp_path):
+    out = tmp_path / "out"
+    _cache(out, "1.0", "2026-01-01T00:00:00Z")
+    releases, _ = history.discover(out)
+    history.write_series(out, releases, _compute)
+    entries = json.loads((out / "releases.js").read_text(encoding="utf-8")
+                         [len("window.CHANGEATLAS_RELEASES = "):].rstrip(";\n"))
+    assert len(entries) == 1
