@@ -28,7 +28,7 @@ map stops working at this scale. See **Large systems**, below.
 
 <!--
   To regenerate docs/img/sample-map.png: run `python -m changeatlas --sample`,
-  then screenshot out/impact-sample.html at 1600x1000 (headless works:
+  then screenshot out/sample/impact-1.2.html at 1600x1000 (headless works:
   msedge --headless=new --screenshot=docs/img/sample-map.png
   --window-size=1600,1000 --virtual-time-budget=10000 <file:// URL>).
 -->
@@ -44,10 +44,11 @@ python -m changeatlas --sample
 python -m changeatlas --sample large
 ```
 
-Then open `out/impact-sample.html` in a browser. This renders the bundled
-fictional web-shop sample (`sample/`) end to end, with zero ADO access.
-`--sample large` renders the 100-repo sample (`sample/large/`) to
-`out/impact-sample-large.html`; `--group-threshold N` (default 150) sets the
+Then open `out/sample/impact-1.2.html` in a browser. This renders every
+release of the bundled fictional web-shop sample (`sample/`, three releases)
+end to end, with zero ADO access, so the release slider has something to
+scrub. `--sample large` renders the five releases of the 100-repo sample
+(`sample/large/`) into `out/sample-large/`; `--group-threshold N` (default 150) sets the
 component count above which a report opens on the In context lens (repos as bubbles) instead of Whole map.
 
 ## Quickstart (Azure DevOps)
@@ -218,6 +219,35 @@ again, settling near, not exactly on, its old positions. Lenses never
 change the tier counts, the List view or the exports — the Obsidian vault
 is always the full atlas, and Export PNG is whatever is on screen.
 
+## Release history (the slider)
+
+A report never embeds another release, but the folder it sits in is a
+**series**, and the slider under the view row scrubs the Impact map through
+the five most recent releases in that folder. Each stop repaints the same
+atlas with that release's shading; flick between two stops and you have the
+diff. A folder with one report shows no slider.
+
+Every render leaves two things beside `impact-<label>.html`:
+
+- `impact-<label>.history.js` — that release's four tier lists and per-node
+  file counts. Node ids only: no stories, PRs, titles or URLs.
+- `releases.js` — the series manifest: the five most recent releases by
+  **fetch date** (`fetched_at` in the release-data file, never the label),
+  each with its sidecar and, where the file exists, its report.
+
+Sidecars are recomputed for every cached release on every render, against
+the current atlas and globs, so an atlas change never leaves stale ids
+behind and an old release needs no re-render to appear. History therefore
+exists only where the `out/release-<label>-data.json` caches live: a team
+that wants the slider keeps those files somewhere shared (a private repo, a
+build artifact) and renders from there.
+
+At an older stop the map, legend counts and roll-up follow the slider. The
+detail panel shows the tier and change size and links to that release's own
+report for its stories and pull requests. List view and Export to Obsidian
+always show the report's own release. `--anonymize` writes no sidecar and
+reads no manifest.
+
 ## Anonymised demos
 
 ```sh
@@ -229,7 +259,7 @@ generic node/story/PR names, and dead pull-request/work-item links on the
 reserved `.example` TLD (they look real on hover but can never resolve to,
 or leak, a real organisation). Topology, node types, tiers, and change
 sizes are preserved — this is for sharing a real release's *shape* without
-sharing its content.
+sharing its content. No history sidecar or manifest is written for an anonymised render, and the report does not load one, so nothing real sits beside it.
 
 ## License
 
