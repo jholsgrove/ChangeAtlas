@@ -17,7 +17,10 @@ runtime that static checks can't see. Currently two:
     counts taken from the clustered/hidden state vis actually holds,
   * bubble work on the 100-repo sample is batched: a hover, a lens change or
     a legend chip re-indexes the graph a handful of times, not once per
-    bubble (vis-network's `_dataChanged` is a full O(nodes+edges) rebuild).
+    bubble (vis-network's `_dataChanged` is a full O(nodes+edges) rebuild),
+  * the release slider on the 100-repo sample re-shades the map, re-applies
+    the lens, and drops a selection the new stop folds into a bubble (tier
+    sets, clustering and selection are all canvas state).
 
 They drive headless Chrome via Playwright, through the ``ReportPage`` page
 object (``tests/browser/report_page.py``); selectors live in
@@ -410,3 +413,33 @@ def test_lens_change_drops_a_selection_it_hides(large_report):
     large_report.choose_lens("Release only")          # that repo node is now hidden
     assert large_report.selected_id() is None
     assert large_report.spotlit_residue() == 0, "release nodes faded behind a hidden selection"
+
+
+def test_release_slider_reshades_reapplies_the_lens_and_drops_a_hidden_selection(large_report):
+    large_report.wait_slider()
+    assert large_report.slider_visible()
+    assert large_report.slider_stops() == ["1.0", "1.1", "1.2", "1.3", "1.4"]
+    assert large_report.shown_release() == "1.0"           # fixture opens impact-1.0.html
+    bubbles_at_1_0 = large_report.bubble_count()
+
+    # A node changed at 1.4 sits inside a bubble at 1.0 (its repo has nothing in 1.0).
+    target = large_report.node_changed_at_but_absent_now("1.4")
+    assert target is not None
+
+    large_report.slide_to("1.4")
+    assert large_report.shown_release() == "1.4"
+    assert "Release 1.4" in large_report.slider_caption()
+    assert large_report.tier_of(target) == "changed"
+    # In context re-applied: a different set of repos has evidence now.
+    assert large_report.bubble_count() > 0
+    assert "Showing release 1.4" in large_report.page.locator("#stats").inner_text()
+
+    # Select that node, then scrub back: at 1.0 its repo collapses, so the
+    # selection must go rather than spotlight a node nobody can see.
+    large_report.page.evaluate("id => { network.selectNodes([id]); showNode(id); }", target)
+    assert large_report.selected_id() == target
+    large_report.slide_to("1.0")
+    assert large_report.tier_of(target) == "dimmed"
+    assert large_report.selected_id() is None
+    assert large_report.spotlit_residue() == 0
+    assert large_report.bubble_count() == bubbles_at_1_0

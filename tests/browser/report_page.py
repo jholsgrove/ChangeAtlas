@@ -340,3 +340,42 @@ class ReportPage:
             && network.body.nodes[e.fromId] && network.body.nodes[e.toId] && (hidden(e.fromId) || hidden(e.toId)));
           return ghostNodes.length + ghostEdges.length;
         }""")
+
+    # ---- release slider ----
+
+    def slider_visible(self) -> bool:
+        return self.page.locator(S.RELEASE_SLIDER).is_visible()
+
+    def wait_slider(self):
+        """Sidecars load asynchronously after the page; wait until the slider has its stops."""
+        self.page.wait_for_function("() => STOPS.length >= 2", timeout=10_000)
+
+    def slider_stops(self) -> list:
+        return self.page.evaluate("STOPS.map(s => s.label)")
+
+    def shown_release(self) -> str:
+        return self.page.evaluate("currentRelease")
+
+    def slider_caption(self) -> str:
+        return self.page.locator(S.RELEASE_CAPTION).inner_text()
+
+    def slide_to(self, label: str):
+        """Set the range input to the stop with this label, as a keyboard user would land on it."""
+        self.page.evaluate("""label => {
+          const i = STOPS.findIndex(s => s.label === label);
+          const el = document.querySelector('#release-range');
+          el.value = String(i);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }""", label)
+        self.wait_settled()
+
+    def tier_of(self, node_id: str) -> str:
+        return self.page.evaluate("id => stateOf(id)", node_id)
+
+    def node_changed_at_but_absent_now(self, label: str) -> str:
+        """A node changed at `label` whose repo has nothing in the shown release
+        (so it sits in a bubble now and its repo opens when the slider reaches `label`)."""
+        return self.page.evaluate("""label => {
+          const h = window.CHANGEATLAS_HISTORY[label];
+          return h.impact.changed.find(id => !hasEvidence(byId[id].repo)) || null;
+        }""", label)
