@@ -477,8 +477,10 @@ def test_roll_up_rows_only_for_impacted_repos_sorted_by_impact():
 def test_roll_up_row_click_focuses_repo():
     html = _render()
     assert "tr.onclick = () => focusRepo(r.key)" in html
-    # List view rows are plain (non-canvas equivalent), panel rows are clickable
-    assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
+    # List view rows are plain (non-canvas equivalent), panel rows are clickable.
+    # The List view's repo sub-table is pinned to this report's own release
+    # (ownStateOf), never a scrubbed one — see test_own_release_classifier_....
+    assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(ownStateOf), false)' in html
 
 
 def test_untouched_legend_entry_is_a_toggle_only_on_whole_map():
@@ -571,3 +573,15 @@ def test_detail_panel_links_to_the_older_release_report():
     assert "historyReportFor(currentRelease)" in html
     # links to sibling reports are plain relative hrefs, escaped
     assert "esc(report)" in html
+
+
+def test_own_release_classifier_pins_export_and_list_view_to_this_report():
+    # Fix round 1: the four tier Sets are mutable (the slider reassigns them),
+    # but Export to Obsidian and the List view's repo sub-table must always
+    # reflect this report's own release, never a scrubbed one.
+    html = _render()
+    assert "function ownStateOf(" in html
+    i = html.index("function buildListView(")
+    j = html.index("function ", i + 10)
+    assert "rollRows(ownStateOf)" in html[i:j]
+    assert "ownStateOf(n.id)" in html

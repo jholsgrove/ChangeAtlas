@@ -270,6 +270,21 @@ const stateOf = id => CHANGED.has(id) ? 'changed'
                     : TOUCHED.has(id) ? 'touched'
                     : TESTONLY.has(id) ? 'testOnly'
                     : PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
+// Pinned to this report's own release, never the slider: the sets above are
+// reassigned by setTierSets when the reader scrubs to an older stop, but the
+// Obsidian export and the List view's repo sub-table both carry this
+// release's stories/PRs and must classify against this release's tiers too.
+const OWN_IMPACT = DATA.impact;
+const OWN_CHANGED = new Set(OWN_IMPACT.changed);
+const OWN_TOUCHED = new Set(OWN_IMPACT.touched || []);
+const OWN_TESTONLY = new Set(OWN_IMPACT.testOnly || []);
+const OWN_PERIPHERAL = new Set(OWN_IMPACT.peripheral);
+function ownStateOf(id) {
+  return OWN_CHANGED.has(id) ? 'changed'
+       : OWN_TOUCHED.has(id) ? 'touched'
+       : OWN_TESTONLY.has(id) ? 'testOnly'
+       : OWN_PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
+}
 // Views: 'impact' (release shading, default), 'system' (plain architecture,
 // nodes coloured by type, no release overlay), 'list' (accessible table).
 let currentView = 'impact';
@@ -645,9 +660,9 @@ DATA.nodes.forEach(n => {
 const repoAnchor = {};
 DATA.nodes.forEach(n => { if (n.type === 'repo') repoAnchor[n.repo] = n.id; });
 const repoTitle = key => (repoAnchor[key] && byId[repoAnchor[key]].title) || key;
-function repoSummary(key) {
+function repoSummary(key, state = stateOf) {
   const c = { changed: 0, touched: 0, testOnly: 0, peripheral: 0, dimmed: 0 };
-  (membersOf[key] || []).forEach(id => c[stateOf(id)]++);
+  (membersOf[key] || []).forEach(id => c[state(id)]++);
   return c;
 }
 const hasEvidence = key => {
@@ -961,9 +976,9 @@ function updateLensPressed() {
 }
 
 // ---- per-repo roll-up (side panel in Impact view; List view always) ----
-function rollRows() {
+function rollRows(state = stateOf) {
   return Object.keys(membersOf)
-    .map(key => ({ key, title: repoTitle(key), c: repoSummary(key) }))
+    .map(key => ({ key, title: repoTitle(key), c: repoSummary(key, state) }))
     .filter(r => r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0)
     .sort((a, b) => (b.c.changed - a.c.changed) || (b.c.touched - a.c.touched) ||
                     (b.c.testOnly - a.c.testOnly) || (b.c.peripheral - a.c.peripheral) ||
@@ -1026,7 +1041,7 @@ function escapeHtml(s) {
 function buildListView() {
   const tiers = [["changed","Changed"],["touched","Touched"],
                  ["testOnly","Test-only"],["peripheral","Peripheral"]];
-  fillRollBody(document.getElementById("list-repos-body"), rollRows(), false);
+  fillRollBody(document.getElementById("list-repos-body"), rollRows(ownStateOf), false);
   const body = document.getElementById("list-view-body");
   body.textContent = ""; // safe to re-enter: clear any rows from a prior throw
   for (const [key, label] of tiers) {
@@ -1201,8 +1216,9 @@ function wikiLink(name) { return '[[' + name + ']]'; }
 function mdLinkText(s) { return String(s).replace(/[\[\]]/g, ')'); }
 function noteFor(n, names, system) {
   // System vault: architecture only — type tag, no release overlay,
-  // matching what the in-app System view shows.
-  const tier = stateOf(n.id);
+  // matching what the in-app System view shows. Exported notes are always
+  // this report's own release, never the scrubbed one: ownStateOf, not stateOf.
+  const tier = ownStateOf(n.id);
   const L = ['---',
              'type: ' + ((TS[n.type] && TS[n.type].label) || n.type)];
   if (n.repo) L.push('repo: "' + String(n.repo).replace(/"/g, '\\"') + '"');
