@@ -1,0 +1,235 @@
+{
+ "release": "1.4",
+ "query": "release-1.4",
+ "fetched_at": "2026-09-30T09:00:00Z",
+ "skipped": [],
+ "work_items": [
+  {
+   "id": 42601,
+   "type": "User Story",
+   "title": "Loyalty.Api: release 1.4 feature work",
+   "url": "https://tracker.example/workitems/42601",
+   "prs": [
+    {
+     "id": 1901,
+     "title": "Loyalty.Api handlers and validation",
+     "repo": "Loyalty.Api",
+     "url": "https://tracker.example/loyalty-api/pullrequest/1901",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1902,
+     "title": "Loyalty.Api options tidy-up",
+     "repo": "Loyalty.Api",
+     "url": "https://tracker.example/loyalty-api/pullrequest/1902",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1903,
+     "title": "Loyalty.Api regression tests",
+     "repo": "Loyalty.Api",
+     "url": "https://tracker.example/loyalty-api/pullrequest/1903",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1904,
+     "title": "Loyalty.Api repository tidy-up",
+     "repo": "Loyalty.Api",
+     "url": "https://tracker.example/loyalty-api/pullrequest/1904",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42602,
+   "type": "User Story",
+   "title": "Promotions.Web: release 1.4 feature work",
+   "url": "https://tracker.example/workitems/42602",
+   "prs": [
+    {
+     "id": 1905,
+     "title": "Promotions.Web handlers and validation",
+     "repo": "Promotions.Web",
+     "url": "https://tracker.example/promotions-web/pullrequest/1905",
+     "status": "completed",
+     "files": [
+      "/src/dashboard/Handler.cs",
+      "/src/dashboard/Validator.cs",
+      "/src/dashboard/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1906,
+     "title": "Promotions.Web options tidy-up",
+     "repo": "Promotions.Web",
+     "url": "https://tracker.example/promotions-web/pullrequest/1906",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs"
+     ]
+    },
+    {
+     "id": 1907,
+     "title": "Promotions.Web regression tests",
+     "repo": "Promotions.Web",
+     "url": "https://tracker.example/promotions-web/pullrequest/1907",
+     "status": "completed",
+     "files": [
+      "/tests/public-api/HandlerTests.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42603,
+   "type": "User Story",
+   "title": "Reviews.Api: release 1.4 feature work",
+   "url": "https://tracker.example/workitems/42603",
+   "prs": [
+    {
+     "id": 1908,
+     "title": "Reviews.Api handlers and validation",
+     "repo": "Reviews.Api",
+     "url": "https://tracker.example/reviews-api/pullrequest/1908",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1909,
+     "title": "Reviews.Api options tidy-up",
+     "repo": "Reviews.Api",
+     "url": "https://tracker.example/reviews-api/pullrequest/1909",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1910,
+     "title": "Reviews.Api regression tests",
+     "repo": "Reviews.Api",
+     "url": "https://tracker.example/reviews-api/pullrequest/1910",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1911,
+     "title": "Reviews.Api repository tidy-up",
+     "repo": "Reviews.Api",
+     "url": "https://tracker.example/reviews-api/pullrequest/1911",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42604,
+   "type": "User Story",
+   "title": "Support.Api: release 1.4 feature work",
+   "url": "https://tracker.example/workitems/42604",
+   "prs": [
+    {
+     "id": 1912,
+     "title": "Support.Api handlers and validation",
+     "repo": "Support.Api",
+     "url": "https://tracker.example/support-api/pullrequest/1912",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1913,
+     "title": "Support.Api options tidy-up",
+     "repo": "Support.Api",
+     "url": "https://tracker.example/support-api/pullrequest/1913",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1914,
+     "title": "Support.Api regression tests",
+     "repo": "Support.Api",
+     "url": "https://tracker.example/support-api/pullrequest/1914",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1915,
+     "title": "Support.Api repository tidy-up",
+     "repo": "Support.Api",
+     "url": "https://tracker.example/support-api/pullrequest/1915",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42605,
+   "type": "Task",
+   "title": "Release notes for 1.4",
+   "url": "https://tracker.example/workitems/42605",
+   "prs": []
+  },
+  {
+   "id": 42606,
+   "type": "Task",
+   "title": "Dependency bump for 1.4",
+   "url": "https://tracker.example/workitems/42606",
+   "prs": [
+    {
+     "id": 1916,
+     "title": "Bump packages",
+     "repo": "Loyalty.Api",
+     "url": "https://tracker.example/loyalty-api/pullrequest/1916",
+     "status": "completed",
+     "files": [
+      "/packages.lock.json"
+     ]
+    }
+   ]
+  }
+ ]
+}

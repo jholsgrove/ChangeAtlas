@@ -310,12 +310,12 @@ def test_old_toggles_are_gone():
 
 def test_apply_lens_is_a_clean_reapply():
     html = _render()
-    i = html.index("function applyLens(name)")
+    i = html.index("function applyLens(name")
     body = html[i:i + 900]
     assert "hideUntouched = L.hide;" in body
     assert "applyGrouping();" in body            # discards manual opens, collapses per rule
     assert "buildLegend();" in body              # the Untouched entry is a toggle only on Whole map
-    assert "settleCanvas('Showing ' + L.label);" in body
+    assert "settleCanvas('Showing ' + L.label, keepView);" in body
 
 
 def test_settle_canvas_is_the_shared_tail():
@@ -323,9 +323,9 @@ def test_settle_canvas_is_the_shared_tail():
     # of (or back into) physics, bubbles restyled, survivors packed when
     # hiding, then settle and frame what is left.
     html = _render()
-    k = html.index("function settleCanvas(label)")
+    k = html.index("function settleCanvas(label")
     tail = html[k:k + 700]
-    for frag in ("applyGhostPhysics();", "restyleBubbles();", "if (hideUntouched) compactSurvivors();",
+    for frag in ("keepView", "applyGhostPhysics();", "restyleBubbles();", "if (hideUntouched) compactSurvivors();",
                  "fitVisibleWhenSettled();", "resettle(120, label + '…');"):
         assert frag in tail, frag
 
@@ -477,8 +477,10 @@ def test_roll_up_rows_only_for_impacted_repos_sorted_by_impact():
 def test_roll_up_row_click_focuses_repo():
     html = _render()
     assert "tr.onclick = () => focusRepo(r.key)" in html
-    # List view rows are plain (non-canvas equivalent), panel rows are clickable
-    assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(), false)' in html
+    # List view rows are plain (non-canvas equivalent), panel rows are clickable.
+    # The List view's repo sub-table is pinned to this report's own release
+    # (ownStateOf), never a scrubbed one — see test_own_release_classifier_....
+    assert 'fillRollBody(document.getElementById("list-repos-body"), rollRows(ownStateOf), false)' in html
 
 
 def test_untouched_legend_entry_is_a_toggle_only_on_whole_map():
@@ -536,3 +538,51 @@ def test_spotlight_includes_bubbles():
     spot = html[i:j]
     assert "setBubble(key, { opacity: keep.has('cl:' + key) ? 1 : 0.12 })" in spot
     assert "setBubble(key, { opacity: bubbleOpacity(key) })" in html[j:j + 600]
+
+
+def test_release_slider_scaffolding_present_and_hidden_by_default():
+    html = _render()
+    assert '<script src="releases.js"></script>' in html
+    assert '<fieldset id="release-slider" hidden' in html
+    assert 'id="release-range"' in html and 'type="range"' in html
+    assert 'aria-label="Release"' in html
+    assert 'list="release-ticks"' in html and '<datalist id="release-ticks">' in html
+    assert 'id="release-caption"' in html and 'aria-live="polite"' in html
+
+
+def test_release_slider_swaps_tiers_and_reapplies_the_lens():
+    html = _render()
+    assert "function setRelease(label)" in html
+    # tier sets must be reassignable, not const
+    assert "let CHANGED" in html and "const CHANGED" not in html
+    # the lens is re-applied because Release only / In context depend on tiers,
+    # keeping the reader's zoom (keepView skips the whole-map refit)
+    assert "applyLens(lens.impact, { keepView: true })" in html
+    # the slider never touches the List view or the Obsidian export
+    assert "DATA.impact[key] || []" in html          # buildListView still reads DATA
+
+
+def test_release_slider_is_skipped_when_history_is_false():
+    html = _render()
+    assert "DATA.history === false" in html
+
+
+def test_detail_panel_links_to_the_older_release_report():
+    html = _render()
+    assert "Stories and pull requests are in the" in html
+    assert "which is not in this folder" in html
+    assert "historyReportFor(currentRelease)" in html
+    # links to sibling reports are plain relative hrefs, escaped
+    assert "esc(report)" in html
+
+
+def test_own_release_classifier_pins_export_and_list_view_to_this_report():
+    # Fix round 1: the four tier Sets are mutable (the slider reassigns them),
+    # but Export to Obsidian and the List view's repo sub-table must always
+    # reflect this report's own release, never a scrubbed one.
+    html = _render()
+    assert "function ownStateOf(" in html
+    i = html.index("function buildListView(")
+    j = html.index("function ", i + 10)
+    assert "rollRows(ownStateOf)" in html[i:j]
+    assert "ownStateOf(n.id)" in html

@@ -1,8 +1,9 @@
 name: Demo
 
 # Build both fictional sample reports and publish them to GitHub Pages, so
-# the README can link clickable demos that never go stale: the web shop at
-# the site root and the 100-repo platform under /large/. Only the bundled
+# the README can link clickable demos that never go stale: the web shop series at
+# the site root and the 100-repo series under /large/ (every release's report, sidecar
+# and the manifest, so the release slider works on the hosted demo). Only the bundled
 # samples are ever built here — no ADO access, no real system maps.
 
 on:
@@ -33,11 +34,15 @@ jobs:
           python-version: "3.13"
       - run: python -m changeatlas --sample
       - run: python -m changeatlas --sample large
-      - name: Stage both reports as the site
+      - name: Stage both series as the site
         run: |
           mkdir -p site/large
-          cp out/impact-sample.html site/index.html
-          cp out/impact-sample-large.html site/large/index.html
+          cp out/sample/* site/
+          cp out/sample-large/* site/large/
+          # The newest report doubles as the landing page. It sits beside the
+          # manifest and sidecars it loads by relative path.
+          cp out/sample/impact-1.2.html site/index.html
+          cp out/sample-large/impact-1.4.html site/large/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

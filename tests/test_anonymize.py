@@ -103,6 +103,11 @@ def test_node_titles_generic_and_repo_labels_mapped():
     assert all(r.startswith("Repo ") or r == "Shared" for r in repos)
 
 
+def test_history_flag_is_forced_false():
+    out = anonymize.anonymize_payload(dict(PAYLOAD, history=True))
+    assert out["history"] is False
+
+
 def test_repo_labels_survive_past_26_repos():
     # STRONGLY RECOMMENDED 9: iterating string.ascii_uppercase directly
     # raised StopIteration past 26 distinct repos. A counter-based scheme

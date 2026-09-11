@@ -1,0 +1,30 @@
+{
+ "changed": [
+  "billing-api-0",
+  "billing-api-1",
+  "payments-gateway-0",
+  "payments-gateway-1",
+  "reporting-worker-0",
+  "reporting-worker-1",
+  "tax-api-0",
+  "tax-api-1"
+ ],
+ "touched": [
+  "billing-api-3",
+  "payments-gateway-2",
+  "reporting-worker-2",
+  "tax-api-3"
+ ],
+ "testOnly": [
+  "billing-api-4",
+  "payments-gateway-3",
+  "reporting-worker-4",
+  "tax-api-4"
+ ],
+ "peripheralIncludes": [],
+ "untouchedDatabases": [
+  "billing-api-2",
+  "reporting-worker-3",
+  "tax-api-2"
+ ]
+}

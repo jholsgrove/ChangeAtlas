@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>/*__TITLE__*/</title>
 <link id="favicon" rel="icon" type="image/svg+xml" href="">
+<!-- Release slider: the series manifest beside this file (see changeatlas/history.py).
+     A lone report gets one harmless 404 here and behaves exactly as before. -->
+<script src="releases.js"></script>
 <style>
 :root{--bg:#0f1419;--panel:#161c22;--line:#232a31;--fg:#d7dde3;--muted:#8a949e;--accent:#4a9eea;--badge-text:#0b0e11;}
 *{box-sizing:border-box}
@@ -104,6 +107,15 @@ border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px}
 .views.lenses{margin-top:0;margin-bottom:10px}
 .views.lenses button{flex:1;font-size:11.5px;padding:4px 6px}
 .views.lenses[hidden]{display:none}
+#release-slider{border:0;margin:8px 0 0;padding:0;min-width:0}
+#release-slider[hidden]{display:none}
+#release-range{width:100%;margin:0;accent-color:var(--accent)}
+#release-ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);
+padding:0 2px}
+#release-ticks option{padding:0;min-width:0}
+#release-caption{margin-top:2px}
+.visually-hidden{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+white-space:nowrap}
 #list-view{position:absolute;inset:0;background:var(--bg);overflow:auto;
 padding:16px 18px}
 #list-view[hidden]{display:none}
@@ -170,6 +182,13 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       </div>
     </h1>
     <div class="controls">
+      <fieldset id="release-slider" hidden>
+        <legend class="visually-hidden">Release shown on the map</legend>
+        <input id="release-range" type="range" min="0" max="0" step="1" value="0"
+               list="release-ticks" aria-label="Release">
+        <datalist id="release-ticks"></datalist>
+        <div class="hint" id="release-caption" aria-live="polite"></div>
+      </fieldset>
       <div class="views lenses" id="lens-row" role="group" aria-label="Impact lens"></div>
       <div class="hint" id="lens-caption"></div>
       <input id="search" list="nodelist" placeholder="Search components…" aria-label="Search components" autocomplete="off">
@@ -214,6 +233,8 @@ if (theme !== 'light' && theme !== 'dark') {
 let PALETTE = PALETTES[theme];
 
 const DATA = /*__DATA__*/;
+let currentRelease = DATA.release;    // label of the release the map is shaded by; the
+                                       // slider (below) is the only thing that changes it
 // Large-graph handling. Above the threshold the report opens on the In
 // context lens (untouched repos as bubbles) and trades vis-network's slow
 // initial-layout pass and live physics for a settle-then-freeze cycle so a
@@ -233,14 +254,36 @@ function buildImpact() {
   };
 }
 buildImpact();
-const CHANGED = new Set(DATA.impact.changed);
-const TOUCHED = new Set(DATA.impact.touched || []);
-const TESTONLY = new Set(DATA.impact.testOnly || []);
-const PERIPHERAL = new Set(DATA.impact.peripheral);
+let CHANGED = new Set(DATA.impact.changed);
+let TOUCHED = new Set(DATA.impact.touched || []);
+let TESTONLY = new Set(DATA.impact.testOnly || []);
+let PERIPHERAL = new Set(DATA.impact.peripheral);
+function setTierSets(imp) {
+  CHANGED = new Set(imp.changed || []);
+  TOUCHED = new Set(imp.touched || []);
+  TESTONLY = new Set(imp.testOnly || []);
+  PERIPHERAL = new Set(imp.peripheral || []);
+  recount();
+}
 const stateOf = id => CHANGED.has(id) ? 'changed'
                     : TOUCHED.has(id) ? 'touched'
                     : TESTONLY.has(id) ? 'testOnly'
                     : PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
+// Pinned to this report's own release, never the slider: the sets above are
+// reassigned by setTierSets when the reader scrubs to an older stop, but the
+// Obsidian export and the List view's repo sub-table both carry this
+// release's stories/PRs and must classify against this release's tiers too.
+const OWN_IMPACT = DATA.impact;
+const OWN_CHANGED = new Set(OWN_IMPACT.changed);
+const OWN_TOUCHED = new Set(OWN_IMPACT.touched || []);
+const OWN_TESTONLY = new Set(OWN_IMPACT.testOnly || []);
+const OWN_PERIPHERAL = new Set(OWN_IMPACT.peripheral);
+function ownStateOf(id) {
+  return OWN_CHANGED.has(id) ? 'changed'
+       : OWN_TOUCHED.has(id) ? 'touched'
+       : OWN_TESTONLY.has(id) ? 'testOnly'
+       : OWN_PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
+}
 // Views: 'impact' (release shading, default), 'system' (plain architecture,
 // nodes coloured by type, no release overlay), 'list' (accessible table).
 let currentView = 'impact';
@@ -360,17 +403,21 @@ function resettle(iterations, message) {
   network.stabilize(iterations);
 }
 
-const counts = {
-  changed: CHANGED.size, touched: TOUCHED.size, testOnly: TESTONLY.size,
-  peripheral: PERIPHERAL.size,
-  dimmed: DATA.nodes.length - CHANGED.size - TOUCHED.size - TESTONLY.size - PERIPHERAL.size,
-};
+const counts = {};
+function recount() {
+  counts.changed = CHANGED.size; counts.touched = TOUCHED.size;
+  counts.testOnly = TESTONLY.size; counts.peripheral = PERIPHERAL.size;
+  counts.dimmed = DATA.nodes.length - CHANGED.size - TOUCHED.size - TESTONLY.size - PERIPHERAL.size;
+}
+recount();
 function buildStats() {
   document.getElementById('stats').textContent = currentView === 'system'
     ? DATA.nodes.length + ' components · ' + DATA.edges.length + ' dependencies'
-    : 'Generated ' + DATA.generated + ' · ' + counts.changed + ' changed · ' +
-      counts.touched + ' touched · ' + counts.testOnly + ' test-only · ' +
-      counts.peripheral + ' peripheral · ' + counts.dimmed + ' untouched';
+    : (currentRelease === DATA.release ? 'Generated ' + DATA.generated
+                                       : 'Showing release ' + currentRelease) + ' · ' +
+      counts.changed + ' changed · ' + counts.touched + ' touched · ' +
+      counts.testOnly + ' test-only · ' + counts.peripheral + ' peripheral · ' +
+      counts.dimmed + ' untouched';
 }
 const legend = document.getElementById('legend');
 // Each chip is a toggle button: pressing it sends its tier/type to the dimmed
@@ -504,22 +551,34 @@ function showNode(id) {
     out.map(e => row(e.to, e.kind, e.note, 'out')).join('') + '</ul>';
   if (inc.length) h += '<h4>Used by</h4><ul>' +
     inc.map(e => row(e.from, e.kind, e.note, 'in')).join('') + '</ul>';
-  const det = currentView === 'system' ? null : DATA.details[id];
+  const own = currentRelease === DATA.release;
+  const det = currentView === 'system' ? null : tierCountsFor(id);
   if (det && (det.prodFiles || det.testFiles)) {
     h += '<h4>Change size</h4><ul><li>' + det.prodFiles + ' production file(s), ' +
-         det.testFiles + ' test file(s) changed</li></ul>';
+         det.testFiles + ' test file(s) changed' + (own ? '' : ' in release ' + esc(currentRelease)) +
+         '</li></ul>';
   }
-  if (det && det.stories.length) {
+  if (own && det && det.stories.length) {
     h += '<h4>Stories in this release</h4><ul>' + det.stories.map(s =>
       '<li><span class="kind">' + esc(s.type) + '</span>' +
       '<a href="' + esc(safeUrl(s.url)) + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a></li>'
     ).join('') + '</ul>';
   }
-  if (det && det.prs.length) {
+  if (own && det && det.prs.length) {
     h += '<h4>Pull requests</h4><ul>' + det.prs.map(p =>
       '<li><span class="kind">' + esc(p.repo) + '</span>' +
       '<a href="' + esc(safeUrl(p.url)) + '" target="_blank">!' + p.id + ' ' + esc(p.title) + '</a></li>'
     ).join('') + '</ul>';
+  }
+  // An older stop carries tiers and counts only; the stories and PRs live in
+  // that release's own report, which is a sibling file when it exists.
+  if (!own && det && currentView !== 'system') {
+    const report = historyReportFor(currentRelease);
+    h += '<h4>Stories and pull requests</h4><p class="empty">' + (report
+      ? 'Stories and pull requests are in the <a href="' + esc(report) + '">release ' +
+        esc(currentRelease) + ' report</a>.'
+      : 'Stories and pull requests are in the release ' + esc(currentRelease) +
+        ' report, which is not in this folder.') + '</p>';
   }
   if (currentView !== 'system' && stateOf(id) === 'peripheral') {
     const near = network.getConnectedNodes(id).filter(o => CHANGED.has(o));
@@ -600,9 +659,9 @@ DATA.nodes.forEach(n => {
 const repoAnchor = {};
 DATA.nodes.forEach(n => { if (n.type === 'repo') repoAnchor[n.repo] = n.id; });
 const repoTitle = key => (repoAnchor[key] && byId[repoAnchor[key]].title) || key;
-function repoSummary(key) {
+function repoSummary(key, state = stateOf) {
   const c = { changed: 0, touched: 0, testOnly: 0, peripheral: 0, dimmed: 0 };
-  (membersOf[key] || []).forEach(id => c[stateOf(id)]++);
+  (membersOf[key] || []).forEach(id => c[state(id)]++);
   return c;
 }
 const hasEvidence = key => {
@@ -848,7 +907,7 @@ function describeLens() {
   }
   return L.label + '. ' + what;
 }
-function applyLens(name) {
+function applyLens(name, { keepView = false } = {}) {
   const set = LENSES[currentView];
   if (!set || !set[name]) return;
   lens[currentView] = name;
@@ -857,7 +916,7 @@ function applyLens(name) {
   applyGrouping();
   updateLensPressed();
   buildLegend();
-  settleCanvas('Showing ' + L.label);
+  settleCanvas('Showing ' + L.label, keepView);
 }
 // Whole map is the one lens that shows untouched nodes flat, so it is the one
 // place the Untouched legend entry hides and shows them (Release only has
@@ -873,7 +932,7 @@ function toggleUntouched() {
 // Shared tail of a lens change and the Untouched toggle: ghosts out of (or
 // back into) physics, bubbles restyled, survivors packed when hiding, then
 // settle and frame what is left. `label` is what assistive tech hears.
-function settleCanvas(label) {
+function settleCanvas(label, keepView = false) {
   applyGhostPhysics();
   restyleBubbles();
   // A selection the lens just hid (or folded into a bubble) would keep its
@@ -884,7 +943,7 @@ function settleCanvas(label) {
   // repeat of the same sentence is announced again.
   lensNote.textContent = '';
   requestAnimationFrame(() => { lensNote.textContent = describeLens(); });
-  fitVisibleWhenSettled();
+  if (!keepView) fitVisibleWhenSettled();
   resettle(120, label + '…');
 }
 // The row is rebuilt only on a view switch so a re-click keeps its focus.
@@ -916,9 +975,9 @@ function updateLensPressed() {
 }
 
 // ---- per-repo roll-up (side panel in Impact view; List view always) ----
-function rollRows() {
+function rollRows(state = stateOf) {
   return Object.keys(membersOf)
-    .map(key => ({ key, title: repoTitle(key), c: repoSummary(key) }))
+    .map(key => ({ key, title: repoTitle(key), c: repoSummary(key, state) }))
     .filter(r => r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0)
     .sort((a, b) => (b.c.changed - a.c.changed) || (b.c.touched - a.c.touched) ||
                     (b.c.testOnly - a.c.testOnly) || (b.c.peripheral - a.c.peripheral) ||
@@ -981,7 +1040,7 @@ function escapeHtml(s) {
 function buildListView() {
   const tiers = [["changed","Changed"],["touched","Touched"],
                  ["testOnly","Test-only"],["peripheral","Peripheral"]];
-  fillRollBody(document.getElementById("list-repos-body"), rollRows(), false);
+  fillRollBody(document.getElementById("list-repos-body"), rollRows(ownStateOf), false);
   const body = document.getElementById("list-view-body");
   body.textContent = ""; // safe to re-enter: clear any rows from a prior throw
   for (const [key, label] of tiers) {
@@ -1000,6 +1059,100 @@ function buildListView() {
     }
   }
 }
+// ---- release slider: scrub the Impact map through the series in this
+// folder. The manifest (releases.js) and one sidecar per release
+// (impact-<label>.history.js) sit beside this file and are loaded as
+// scripts, which works from file:// where fetch does not. Nothing about
+// other releases is embedded here; a lone report has no slider. ----
+const sliderBox = document.getElementById('release-slider');
+const sliderInput = document.getElementById('release-range');
+const sliderTicks = document.getElementById('release-ticks');
+const sliderCaption = document.getElementById('release-caption');
+let STOPS = [];                       // [{label, fetchedAt, report, own}] oldest first
+const historyReportFor = label => {
+  const s = STOPS.find(x => x.label === label);
+  return s && s.report ? s.report : null;
+};
+// Change size for the shown release: the report's own details, or the sidecar counts.
+function tierCountsFor(id) {
+  if (currentRelease === DATA.release) return DATA.details[id] || null;
+  const h = window.CHANGEATLAS_HISTORY && window.CHANGEATLAS_HISTORY[currentRelease];
+  return (h && h.counts[id]) || null;
+}
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? iso : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+function loadScript(src) {
+  return new Promise(done => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = () => done(true); s.onerror = () => done(false);
+    document.head.appendChild(s);
+  });
+}
+function initReleaseSlider() {
+  const manifest = window.CHANGEATLAS_RELEASES;
+  if (DATA.history === false || !Array.isArray(manifest)) return;
+  const stops = manifest
+    .filter(e => e && typeof e.label === 'string' && typeof e.history === 'string')
+    .map(e => ({ label: e.label, fetchedAt: e.fetchedAt || '', report: e.report || null,
+                 own: e.label === DATA.release }));
+  // The report's own release is always a stop (its tiers are in DATA), even
+  // if its fetch date has fallen outside the five most recent.
+  if (!stops.some(s => s.own)) stops.push({ label: DATA.release, fetchedAt: '', report: null, own: true });
+  stops.sort((a, b) => (a.fetchedAt < b.fetchedAt ? -1 : a.fetchedAt > b.fetchedAt ? 1 : 0));
+  const pending = stops.filter(s => !s.own && !(window.CHANGEATLAS_HISTORY || {})[s.label]);
+  Promise.all(pending.map(s => loadScript(manifest.find(e => e.label === s.label).history)))
+    .then(() => {
+      const loaded = stops.filter(s => s.own || (window.CHANGEATLAS_HISTORY || {})[s.label]);
+      if (loaded.length < 2) return;
+      STOPS = loaded;
+      buildReleaseSlider();
+    });
+}
+function buildReleaseSlider() {
+  sliderInput.max = String(STOPS.length - 1);
+  sliderInput.value = String(STOPS.findIndex(s => s.label === currentRelease));
+  sliderTicks.textContent = '';
+  STOPS.forEach((s, i) => {
+    const o = document.createElement('option');
+    o.value = String(i); o.label = s.label; o.textContent = s.label;
+    sliderTicks.appendChild(o);
+  });
+  sliderInput.setAttribute('aria-valuetext', 'Release ' + currentRelease);
+  sliderBox.hidden = currentView !== 'impact';
+  describeRelease();
+}
+function describeRelease() {
+  const s = STOPS.find(x => x.label === currentRelease);
+  if (!s) { sliderCaption.textContent = ''; return; }
+  sliderCaption.textContent = s.own
+    ? 'Release ' + s.label + ' · this report · map only'
+    : 'Release ' + s.label + (s.fetchedAt ? ' · fetched ' + fmtDate(s.fetchedAt) : '') +
+      " · shaded against today's atlas · map only";
+}
+function setRelease(label) {
+  const s = STOPS.find(x => x.label === label);
+  if (!s || label === currentRelease) return;
+  currentRelease = label;
+  setTierSets(s.own ? DATA.impact : window.CHANGEATLAS_HISTORY[label].impact);
+  refreshVisuals();          // nodes and edges re-shaded from the new sets
+  buildStats();
+  buildLegend();
+  // Release only and In context are functions of the tiers: re-apply. This
+  // also rebuilds the roll-up and drops a selection the lens no longer
+  // draws. keepView: true skips the whole-map refit so the reader's zoom
+  // survives the stop change.
+  applyLens(lens.impact, { keepView: true });
+  if (selected) showNode(selected);   // panel re-rendered against the new release
+  sliderInput.setAttribute('aria-valuetext', 'Release ' + label);
+  describeRelease();
+}
+sliderInput.addEventListener('input', () => {
+  const s = STOPS[Number(sliderInput.value)];
+  if (s) setRelease(s.label);
+});
+
 // ---- view switching: Impact | System | List ----
 const viewButtons = {
   impact: document.getElementById('view-impact'),
@@ -1023,6 +1176,7 @@ function setView(v) {
   buildLegend();
   buildLensRow();
   document.getElementById('roll-wrap').hidden = v !== 'impact';
+  sliderBox.hidden = v !== 'impact' || STOPS.length < 2;
   if (v !== 'list') applyLens(lens[v]);
 }
 function refreshVisuals() {
@@ -1062,8 +1216,9 @@ function wikiLink(name) { return '[[' + name + ']]'; }
 function mdLinkText(s) { return String(s).replace(/[\[\]]/g, ')'); }
 function noteFor(n, names, system) {
   // System vault: architecture only — type tag, no release overlay,
-  // matching what the in-app System view shows.
-  const tier = stateOf(n.id);
+  // matching what the in-app System view shows. Exported notes are always
+  // this report's own release, never the scrubbed one: ownStateOf, not stateOf.
+  const tier = ownStateOf(n.id);
   const L = ['---',
              'type: ' + ((TS[n.type] && TS[n.type].label) || n.type)];
   if (n.repo) L.push('repo: "' + String(n.repo).replace(/"/g, '\\"') + '"');
@@ -1309,6 +1464,7 @@ buildLensRow();
 buildLegend();
 applyGrouping();   // initial: collapse per the default lens before the first layout settles. Skips applyLens on purpose: neither default lens hides, and a second stabilize() during the first would fight it.
 lensNote.textContent = describeLens();   // the note has no settle to wait for at bootstrap
+initReleaseSlider();   // no-op for a lone report or an anonymised one
 </script>
 </body>
 </html>

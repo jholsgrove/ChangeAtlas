@@ -3,9 +3,11 @@
 Run:  python sample/large/generate.py
 
 It is the ONLY writer of graph-data.json, component-globs.json,
-release-1.0-data.json and expected-tiers.json in this directory. Output is
-deterministic (fixed seed) so tests/test_sample_large.py can regenerate into
-a temp dir and diff against the checked-in files.
+release-<label>-data.json and expected-tiers-<label>.json in this directory.
+Output is deterministic (fixed seed) so tests/test_sample_large.py can
+regenerate into a temp dir and diff against the checked-in files.
+Releases 1.1 to 1.4 are generated (RELEASES) so the report's release slider
+has five stops, the cap.
 
 The world: a retail platform, 20 product domains x 5 repo roles = 100 repos,
 8-20 components each. One release (1.0) lands in six repos and is designed
@@ -66,6 +68,16 @@ EXTERNALS = ["Stripe", "SendGrid", "Datadog", "Azure Storage", "Azure Key Vault"
 CROSS = [("platform-event-bus", "Platform Event Bus"),
          ("audit-log-stream", "Audit Log Stream")]
 FORBIDDEN = ("test", "spec", "mock")
+
+# Later releases: (label, fetched_at, repos that get work). Each lands in a
+# different handful of repos so bubbles change colour between slider stops.
+# 1.0 is the hand-designed release in build_release and is not listed here.
+RELEASES = [
+    ("1.1", "2026-09-09T09:00:00Z", ["catalog-api", "catalog-web", "search-api", "pricing-api"]),
+    ("1.2", "2026-09-16T09:00:00Z", ["billing-api", "tax-api", "payments-gateway", "reporting-worker"]),
+    ("1.3", "2026-09-23T09:00:00Z", ["shipping-api", "fulfilment-worker", "returns-api", "notifications-worker"]),
+    ("1.4", "2026-09-30T09:00:00Z", ["loyalty-api", "promotions-web", "reviews-api", "support-api"]),
+]
 
 
 def slug(s):
@@ -314,17 +326,76 @@ def build_release(nodes, repos, segments):
     return release, expected
 
 
+def build_later_release(label, fetched_at, nodes, repos, segments, focus_repos):
+    """A generated release: in each focus repo the first non-database members
+    get 3 prod files (changed), the next gets 1 (touched), the next a test
+    file only. Databases in focus repos stay untouched (data-access edit only),
+    so the slider shows them staying grey while their repo lights up."""
+    by_id = {n["id"]: n for n in nodes}
+    changed, touched, test_only, untouched_db = [], [], [], []
+    stories = []
+    n_label = label.replace(".", "")
+    counter = {"pr": 500 + 100 * int(n_label), "story": 41200 + 100 * int(n_label)}
+
+    def pr(key, title, files):
+        counter["pr"] += 1
+        return {"id": counter["pr"], "title": title, "repo": by_id[key]["title"],
+                "url": f"{TRACKER}/{key}/pullrequest/{counter['pr']}",
+                "status": "completed", "files": files}
+
+    def story(title, prs, kind="User Story"):
+        counter["story"] += 1
+        stories.append({"id": counter["story"], "type": kind, "title": title,
+                        "url": f"{TRACKER}/workitems/{counter['story']}", "prs": prs})
+
+    def prod(m, n):
+        return [f"/src/{segments[m]}/{cls}.cs" for cls in
+                ("Handler", "Validator", "Mapper", "Options", "Extensions")[:n]]
+
+    def test(m):
+        return [f"/tests/{segments[m]}/HandlerTests.cs"]
+
+    for k in focus_repos:
+        non_db = [m for m in repos[k] if by_id[m]["type"] != "database"]
+        assert len(non_db) >= 4, k
+        db = next((m for m in repos[k] if by_id[m]["type"] == "database"), None)
+        changed += non_db[:2]
+        touched.append(non_db[2])
+        test_only.append(non_db[3])
+        if db:
+            untouched_db.append(db)
+        title = by_id[k]["title"]
+        story(f"{title}: release {label} feature work", [
+            pr(k, f"{title} handlers and validation", prod(non_db[0], 3) + prod(non_db[1], 3)),
+            pr(k, f"{title} options tidy-up", prod(non_db[2], 1)),
+            pr(k, f"{title} regression tests", test(non_db[3])),
+        ] + ([pr(k, f"{title} repository tidy-up", [f"/src/{segments[db]}/Repository.cs"])] if db else []))
+    story(f"Release notes for {label}", [], kind="Task")
+    story(f"Dependency bump for {label}", [pr(focus_repos[0], "Bump packages", ["/packages.lock.json"])],
+          kind="Task")
+    release = {"release": label, "query": f"release-{label}",
+               "fetched_at": fetched_at, "skipped": [], "work_items": stories}
+    expected = {"changed": sorted(changed), "touched": sorted(touched),
+                "testOnly": sorted(test_only), "peripheralIncludes": [],
+                "untouchedDatabases": sorted(untouched_db)}
+    return release, expected
+
+
 def write_all(out_dir):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rng = random.Random(SEED)
     nodes, edges, repos, segments = build_graph(rng)
     globs = build_globs(nodes, segments)
-    release, expected = build_release(nodes, repos, segments)
     dump(out_dir / "graph-data.json", {"nodes": nodes, "edges": edges})
     dump(out_dir / "component-globs.json", globs)
+    release, expected = build_release(nodes, repos, segments)
     dump(out_dir / "release-1.0-data.json", release)
-    dump(out_dir / "expected-tiers.json", expected)
+    dump(out_dir / "expected-tiers-1.0.json", expected)
+    for label, fetched_at, focus in RELEASES:
+        rel, exp = build_later_release(label, fetched_at, nodes, repos, segments, focus)
+        dump(out_dir / f"release-{label}-data.json", rel)
+        dump(out_dir / f"expected-tiers-{label}.json", exp)
     return expected
 
 

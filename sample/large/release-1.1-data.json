@@ -1,0 +1,235 @@
+{
+ "release": "1.1",
+ "query": "release-1.1",
+ "fetched_at": "2026-09-09T09:00:00Z",
+ "skipped": [],
+ "work_items": [
+  {
+   "id": 42301,
+   "type": "User Story",
+   "title": "Catalog.Api: release 1.1 feature work",
+   "url": "https://tracker.example/workitems/42301",
+   "prs": [
+    {
+     "id": 1601,
+     "title": "Catalog.Api handlers and validation",
+     "repo": "Catalog.Api",
+     "url": "https://tracker.example/catalog-api/pullrequest/1601",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1602,
+     "title": "Catalog.Api options tidy-up",
+     "repo": "Catalog.Api",
+     "url": "https://tracker.example/catalog-api/pullrequest/1602",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1603,
+     "title": "Catalog.Api regression tests",
+     "repo": "Catalog.Api",
+     "url": "https://tracker.example/catalog-api/pullrequest/1603",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1604,
+     "title": "Catalog.Api repository tidy-up",
+     "repo": "Catalog.Api",
+     "url": "https://tracker.example/catalog-api/pullrequest/1604",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42302,
+   "type": "User Story",
+   "title": "Catalog.Web: release 1.1 feature work",
+   "url": "https://tracker.example/workitems/42302",
+   "prs": [
+    {
+     "id": 1605,
+     "title": "Catalog.Web handlers and validation",
+     "repo": "Catalog.Web",
+     "url": "https://tracker.example/catalog-web/pullrequest/1605",
+     "status": "completed",
+     "files": [
+      "/src/dashboard/Handler.cs",
+      "/src/dashboard/Validator.cs",
+      "/src/dashboard/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1606,
+     "title": "Catalog.Web options tidy-up",
+     "repo": "Catalog.Web",
+     "url": "https://tracker.example/catalog-web/pullrequest/1606",
+     "status": "completed",
+     "files": [
+      "/src/core/Handler.cs"
+     ]
+    },
+    {
+     "id": 1607,
+     "title": "Catalog.Web regression tests",
+     "repo": "Catalog.Web",
+     "url": "https://tracker.example/catalog-web/pullrequest/1607",
+     "status": "completed",
+     "files": [
+      "/tests/public-api/HandlerTests.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42303,
+   "type": "User Story",
+   "title": "Search.Api: release 1.1 feature work",
+   "url": "https://tracker.example/workitems/42303",
+   "prs": [
+    {
+     "id": 1608,
+     "title": "Search.Api handlers and validation",
+     "repo": "Search.Api",
+     "url": "https://tracker.example/search-api/pullrequest/1608",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1609,
+     "title": "Search.Api options tidy-up",
+     "repo": "Search.Api",
+     "url": "https://tracker.example/search-api/pullrequest/1609",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1610,
+     "title": "Search.Api regression tests",
+     "repo": "Search.Api",
+     "url": "https://tracker.example/search-api/pullrequest/1610",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1611,
+     "title": "Search.Api repository tidy-up",
+     "repo": "Search.Api",
+     "url": "https://tracker.example/search-api/pullrequest/1611",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42304,
+   "type": "User Story",
+   "title": "Pricing.Api: release 1.1 feature work",
+   "url": "https://tracker.example/workitems/42304",
+   "prs": [
+    {
+     "id": 1612,
+     "title": "Pricing.Api handlers and validation",
+     "repo": "Pricing.Api",
+     "url": "https://tracker.example/pricing-api/pullrequest/1612",
+     "status": "completed",
+     "files": [
+      "/src/public-api/Handler.cs",
+      "/src/public-api/Validator.cs",
+      "/src/public-api/Mapper.cs",
+      "/src/domain-model/Handler.cs",
+      "/src/domain-model/Validator.cs",
+      "/src/domain-model/Mapper.cs"
+     ]
+    },
+    {
+     "id": 1613,
+     "title": "Pricing.Api options tidy-up",
+     "repo": "Pricing.Api",
+     "url": "https://tracker.example/pricing-api/pullrequest/1613",
+     "status": "completed",
+     "files": [
+      "/src/events-schema/Handler.cs"
+     ]
+    },
+    {
+     "id": 1614,
+     "title": "Pricing.Api regression tests",
+     "repo": "Pricing.Api",
+     "url": "https://tracker.example/pricing-api/pullrequest/1614",
+     "status": "completed",
+     "files": [
+      "/tests/core/HandlerTests.cs"
+     ]
+    },
+    {
+     "id": 1615,
+     "title": "Pricing.Api repository tidy-up",
+     "repo": "Pricing.Api",
+     "url": "https://tracker.example/pricing-api/pullrequest/1615",
+     "status": "completed",
+     "files": [
+      "/src/database/Repository.cs"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 42305,
+   "type": "Task",
+   "title": "Release notes for 1.1",
+   "url": "https://tracker.example/workitems/42305",
+   "prs": []
+  },
+  {
+   "id": 42306,
+   "type": "Task",
+   "title": "Dependency bump for 1.1",
+   "url": "https://tracker.example/workitems/42306",
+   "prs": [
+    {
+     "id": 1616,
+     "title": "Bump packages",
+     "repo": "Catalog.Api",
+     "url": "https://tracker.example/catalog-api/pullrequest/1616",
+     "status": "completed",
+     "files": [
+      "/packages.lock.json"
+     ]
+    }
+   ]
+  }
+ ]
+}

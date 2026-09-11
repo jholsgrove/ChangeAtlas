@@ -36,6 +36,10 @@ gatherer) and everything downstream — impact computation, the rendered map
 }
 ```
 
+`fetched_at` also orders the release slider: the report's series manifest
+lists the five most recently *fetched* releases, oldest first, regardless
+of how the labels sort.
+
 ## Field-by-field
 
 | Field | Type | Meaning |
