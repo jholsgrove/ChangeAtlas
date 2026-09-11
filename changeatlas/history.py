@@ -5,12 +5,15 @@ the render leaves a small sidecar (`impact-<label>.history.js`: the four tier
 lists and per-node file counts, node ids only) and rewrites one manifest
 (`releases.js`) listing the five most recent releases by fetch date. The
 report loads both with plain <script src> tags, which work from file://
-where fetch and iframes do not.
+where fetch and iframes do not. A `latest.html` stub beside them redirects
+to the newest release that has a report, so another page can link to the
+series without knowing its labels.
 
 Sidecars are recomputed on every render against the *current* atlas and
 globs: impact.compute is a pure function of one cached release-data file
 plus the graph, so an atlas change never leaves stale ids behind.
 """
+import html
 import json
 import re
 from dataclasses import dataclass
@@ -21,6 +24,7 @@ from . import impact
 
 HISTORY_LIMIT = 5
 MANIFEST_NAME = "releases.js"
+LATEST_NAME = "latest.html"
 _CACHE_RE = re.compile(r"^release-(.+)-data\.json$")
 _LABEL_RE = re.compile(r"[A-Za-z0-9._+-]{1,64}")
 
@@ -101,6 +105,26 @@ def sidecar(gathered: dict, components: list, nodes: list, edges: list, heur,
     }
 
 
+_LATEST_STUB = """<!doctype html>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="0; url={report}">
+<title>ChangeAtlas - release {label}</title>
+<p>Latest release: <a href="{report}">{label}</a></p>
+"""
+
+
+def _write_latest(out_dir: Path, entries: list) -> None:
+    """Point latest.html at the newest release that has a report; drop a stale one."""
+    target = next((e for e in reversed(entries) if e["report"]), None)
+    stub = out_dir / LATEST_NAME
+    if target is None:
+        stub.unlink(missing_ok=True)
+        return
+    stub.write_text(_LATEST_STUB.format(report=html.escape(target["report"], quote=True),
+                                        label=html.escape(target["label"])),
+                    encoding="utf-8")
+
+
 def _js(value) -> str:
     # '<\/' keeps a stray '</script>' inert should anyone inline this file.
     return json.dumps(value, ensure_ascii=False).replace("</", "<\\/")
@@ -133,4 +157,5 @@ def write_series(out_dir: Path, releases: list[Release], compute) -> list[str]:
                         "report": report if (out_dir / report).exists() else None})
     (out_dir / MANIFEST_NAME).write_text(
         f"window.CHANGEATLAS_RELEASES = {_js(entries)};\n", encoding="utf-8")
+    _write_latest(out_dir, entries)
     return warnings

@@ -163,3 +163,38 @@ def test_write_series_with_one_release_still_writes_manifest(tmp_path):
     entries = json.loads((out / "releases.js").read_text(encoding="utf-8")
                          [len("window.CHANGEATLAS_RELEASES = "):].rstrip(";\n"))
     assert len(entries) == 1
+
+
+def test_write_series_writes_latest_stub_pointing_at_newest_report(tmp_path):
+    out = tmp_path / "out"
+    _cache(out, "26.10", "2026-01-05T00:00:00Z")   # older fetch, "bigger" label
+    _cache(out, "26.9", "2026-03-01T00:00:00Z")
+    for label in ("26.10", "26.9"):
+        (out / f"impact-{label}.html").write_text("<html>", encoding="utf-8")
+    releases, _ = history.discover(out)
+    history.write_series(out, releases, _compute)
+    stub = (out / history.LATEST_NAME).read_text(encoding="utf-8")
+    assert 'content="0; url=impact-26.9.html"' in stub
+    assert 'href="impact-26.9.html"' in stub
+    assert "26.10" not in stub
+
+
+def test_latest_stub_skips_a_newest_release_with_no_report(tmp_path):
+    out = tmp_path / "out"
+    _cache(out, "1.0", "2026-01-01T00:00:00Z")
+    _cache(out, "1.1", "2026-01-02T00:00:00Z")     # cache only, never rendered
+    (out / "impact-1.0.html").write_text("<html>", encoding="utf-8")
+    releases, _ = history.discover(out)
+    history.write_series(out, releases, _compute)
+    assert 'url=impact-1.0.html"' in (out / history.LATEST_NAME).read_text(encoding="utf-8")
+
+
+def test_latest_stub_is_removed_when_no_release_has_a_report(tmp_path):
+    out = tmp_path / "out"
+    _cache(out, "1.0", "2026-01-01T00:00:00Z")
+    out.mkdir(exist_ok=True)
+    (out / history.LATEST_NAME).write_text("stale", encoding="utf-8")
+    releases, _ = history.discover(out)
+    history.write_series(out, releases, _compute)
+    assert not (out / history.LATEST_NAME).exists()
+

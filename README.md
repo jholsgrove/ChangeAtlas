@@ -227,13 +227,16 @@ the five most recent releases in that folder. Each stop repaints the same
 atlas with that release's shading; flick between two stops and you have the
 diff. A folder with one report shows no slider.
 
-Every render leaves two things beside `impact-<label>.html`:
+Every render leaves three things beside `impact-<label>.html`:
 
 - `impact-<label>.history.js` — that release's four tier lists and per-node
   file counts. Node ids only: no stories, PRs, titles or URLs.
 - `releases.js` — the series manifest: the five most recent releases by
   **fetch date** (`fetched_at` in the release-data file, never the label),
   each with its sidecar and, where the file exists, its report.
+- `latest.html` — a redirect to the newest release in the manifest that has
+  a report, so another page can link to the series without knowing its
+  labels. Rewritten on every render.
 
 Sidecars are recomputed for every cached release on every render, against
 the current atlas and globs, so an atlas change never leaves stale ids
@@ -262,7 +265,8 @@ sizes are preserved — this is for sharing a real release's *shape* without
 sharing its content. An anonymised render writes no history sidecar and does
 not rewrite the manifest, and the anonymised report ignores any manifest it
 finds, so the single HTML file carries and shows nothing real. Earlier real
-renders' `release-*-data.json`, `impact-*.history.js` and `releases.js` may
+renders' `release-*-data.json`, `impact-*.history.js`, `releases.js` and
+`latest.html` may
 still be in the same `out/` folder, so share the one file, not the folder.
 
 ## License
