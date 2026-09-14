@@ -399,3 +399,64 @@ class ReportPage:
           const h = window.CHANGEATLAS_HISTORY[label];
           return h.impact.changed.find(id => !hasEvidence(byId[id].repo) && stateOf(id) === 'dimmed') || null;
         }""", label)
+
+    # ---- History view ----
+
+    def history_button_visible(self) -> bool:
+        return self.page.locator(S.VIEW_BUTTON.format(name="history")).is_visible()
+
+    def wait_history(self):
+        """The History fold is built in the same tick as the slider, after the sidecars load."""
+        self.page.wait_for_function("() => HISTORY !== null", timeout=10_000)
+
+    def history_stop_count(self) -> int:
+        return self.page.evaluate("HISTORY.n")
+
+    def freq_of(self, node_id: str) -> int:
+        return self.page.evaluate("id => histFreq(id)", node_id)
+
+    def node_fill(self, node_id: str) -> str:
+        return self.page.evaluate("id => network.body.nodes[id].options.color.background", node_id)
+
+    def node_border_width(self, node_id: str) -> int:
+        return self.page.evaluate("id => network.body.nodes[id].options.borderWidth", node_id)
+
+    def history_fill(self, f: int) -> str:
+        return self.page.evaluate("f => PALETTE.history.fills[f - 1]", f)
+
+    def dimmed_fill(self) -> str:
+        return self.page.evaluate("PALETTE.dimmed")
+
+    def stats(self) -> str:
+        return self.page.locator(S.STATS).inner_text()
+
+    def roll_caption(self) -> str:
+        # textContent, not inner_text: the caption is styled uppercase.
+        return self.page.locator(S.ROLL_CAPTION).evaluate("el => el.textContent")
+
+    def roll_titles(self) -> list:
+        return self.page.eval_on_selector_all("#roll-body th", "els => els.map(e => e.textContent)")
+
+    def legend_texts(self) -> list:
+        return self.page.eval_on_selector_all("#legend .chip", "els => els.map(e => e.textContent.trim())")
+
+    def detail_text(self) -> str:
+        return self.page.locator(S.DETAIL).inner_text()
+
+    def detail_links(self) -> list:
+        return self.page.eval_on_selector_all(
+            "#detail a[href]", "els => els.map(e => e.getAttribute('href'))")
+
+    def select_node(self, node_id: str):
+        """Select programmatically (as search does), so the panel renders regardless of zoom."""
+        self.page.evaluate("id => { network.selectNodes([id]); showNode(id); }", node_id)
+
+    def hot_node_count(self) -> int:
+        return self.page.evaluate("DATA.nodes.filter(n => histFreq(n.id) >= K_HOT).length")
+
+    def export_obsidian(self) -> tuple:
+        """Click Export to Obsidian; return (suggested filename, zip bytes)."""
+        with self.page.expect_download() as dl:
+            self.page.click(S.EXPORT_OBSIDIAN)
+        download = dl.value
+        return download.suggested_filename, Path(download.path()).read_bytes()

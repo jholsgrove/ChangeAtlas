@@ -92,3 +92,14 @@ def test_story_and_pr_urls_go_through_safeurl():
     # Same discipline as showNode/buildListView: exported links must be
     # http(s) or become inert.
     assert "](' + safeUrl(" in html
+
+
+def test_export_carries_change_history_when_the_folder_is_a_series():
+    # A report in a series (sidecars loaded) exports one "Change history"
+    # section per component note and a Hotspots index note, folded from the
+    # same per-release data the History view shows. A lone report exports
+    # exactly what it did before.
+    html = _render()
+    assert "'## Change history'" in html
+    assert "'Hotspots" in html
+    assert "function hotspotsNote" in html
