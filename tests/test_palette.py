@@ -99,3 +99,35 @@ def test_bubble_border_contrast(theme):
     p = THEMES[theme]
     assert contrast(p["tiers"]["peripheral"]["border"], p["bg"]) >= 3.0
     assert contrast(p["bubble_border"], p["bg"]) >= 1.5
+
+
+# ---- History view: one hue, five buckets (changed in 1..5 of the last 5 releases) ----
+
+@pytest.mark.parametrize("theme", THEME_IDS)
+def test_history_ramp_shape(theme):
+    h = THEMES[theme]["history"]
+    assert len(h["fills"]) == 5              # HISTORY_LIMIT buckets
+    assert len(set(h["fills"])) == 5         # every bucket its own colour
+    assert h["border"]
+
+
+@pytest.mark.parametrize("theme", THEME_IDS)
+def test_history_fills_contrast_aa(theme):   # WCAG 1.4.11: 3:1 for graphical objects
+    p = THEMES[theme]
+    for i, fill in enumerate(p["history"]["fills"]):
+        assert contrast(fill, p["bg"]) >= 3.0, (theme, i, fill)
+    assert contrast(p["history"]["border"], p["bg"]) >= 3.0
+
+
+@pytest.mark.parametrize("theme", THEME_IDS)
+def test_history_fills_read_as_a_ramp(theme):
+    # Hotter = further from the background, monotonically, so the legend and
+    # the map agree on which end is hot without a reader memorising five hues.
+    p = THEMES[theme]
+    lums = [_lum(f) for f in p["history"]["fills"]]
+    steps = [b - a for a, b in zip(lums, lums[1:], strict=False)]
+    if theme == "dark":
+        assert all(s > 0 for s in steps), lums
+    else:
+        assert all(s < 0 for s in steps), lums
+    assert all(abs(s) >= 0.03 for s in steps), lums   # adjacent buckets distinguishable

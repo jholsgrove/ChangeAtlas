@@ -372,6 +372,7 @@ def test_anonymized_render_writes_no_history_files(tmp_path):
     assert cli.main(args + ["--anonymize"], fetch=None) == 0
     out = root / "out"
     assert not (out / "releases.js").exists()
+    assert not (out / "latest.html").exists()
     assert not (out / "impact-1.0.history.js").exists()
     assert '"history": false' in (out / "impact-1.0-anon.html").read_text(encoding="utf-8")
 
@@ -382,5 +383,6 @@ def test_anonymized_sample_render_writes_no_history_files(tmp_path):
     assert rc == 0
     series = root / "out" / "sample"
     assert not (series / "releases.js").exists()
+    assert not (series / "latest.html").exists()
     assert not (series / "impact-1.0.history.js").exists()
     assert '"history": false' in (series / "impact-1.0-anon.html").read_text(encoding="utf-8")

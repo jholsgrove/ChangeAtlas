@@ -502,3 +502,133 @@ def test_missing_sidecar_is_dropped_from_the_stops(browser, shop_series_dir, tmp
         assert r.page_errors() == []
     finally:
         r.close()
+
+
+# ---- History view: the fold across the series' stops ----
+
+def test_history_view_appears_with_the_series_and_shades_by_frequency(report):
+    # The shop series has three releases: two components changed in two of
+    # them, seven in one (tests/test_sample_golden.py has the tier truth).
+    report.wait_history()
+    assert report.history_button_visible()
+    assert report.history_stop_count() == 3
+    assert report.freq_of("checkout-flow") == 2      # changed 1.0, touched 1.2
+    assert report.freq_of("pricing-engine") == 2     # touched 1.0, changed 1.1
+    assert report.freq_of("orders-api") == 1         # peripheral 1.0 does not count; changed 1.2
+    assert report.freq_of("storefront-ui") == 0      # peripheral only
+
+    report.switch_view("history")
+    assert not report.slider_visible(), "History is the fold across the stops; no scrubber"
+    assert report.active_lens() == "Whole map"       # small map: same default as Impact
+    assert "Last 3 releases" in report.stats()
+    assert "2 hot" in report.stats()
+    # One hue, bucket = count; the border thickens with it (not colour alone).
+    assert report.node_fill("checkout-flow") == report.history_fill(2)
+    assert report.node_border_width("checkout-flow") == 2
+    assert report.node_fill("orders-api") == report.history_fill(1)
+    assert report.node_border_width("orders-api") == 1
+    assert report.node_fill("storefront-ui") == report.dimmed_fill()
+    chips = report.legend_texts()
+    assert any(c.startswith("In 3 of 3 (0)") for c in chips)
+    assert any(c.startswith("In 2 of 3 (2)") for c in chips)
+    assert any(c.startswith("In 1 of 3 (7)") for c in chips)
+    assert any(c.startswith("Never (") for c in chips)
+    assert report.legend_entry_is_button("In 2 of 3")
+    assert report.legend_entry_is_button("Never")     # a toggle on Whole map, like Untouched
+    assert report.page_errors() == []
+
+
+def test_history_hotspot_table_and_panel_rows(report):
+    report.wait_history()
+    report.switch_view("history")
+    assert report.roll_up_visible()
+    assert report.roll_caption() == "Hotspots across the last 3 releases"
+    assert report.roll_titles(), "hotspot table has rows"
+    # The panel lists every stop that changed the node, newest first, and
+    # links to the sibling report for the stops that are not this one.
+    report.select_node("checkout-flow")
+    text = report.detail_text()
+    assert "Changed in 2 of the last 3 releases" in text
+    assert text.index("Release 1.2") < text.index("Release 1.0")
+    links = report.detail_links()
+    assert "impact-1.2.html" in links
+    assert "impact-1.0.html" not in links             # the 1.0 row: this page is that report
+    assert "Stories in this release" not in text     # per-release sections belong to Impact view
+
+
+def test_history_hot_only_keeps_only_the_hot(report):
+    report.wait_history()
+    report.switch_view("history")
+    report.choose_lens("Hot only")
+    assert report.visible_node_count() == report.hot_node_count() == 2
+    assert report.ghosts_in_physics() == 0
+    assert "2 components hot in the last 3 releases shown" in report.lens_note()
+    assert not report.legend_entry_is_button("Never"), "Hot only already hides the never-changed"
+    report.choose_lens("Whole map")
+    assert report.visible_node_count() == report.total_node_count()
+
+
+def test_history_never_chip_hides_and_shows_the_never_changed_on_whole_map(report):
+    # The analogue of Impact view's Untouched chip: a toggle on Whole map only,
+    # and it hides just the never-changed, not the once-changed.
+    report.wait_history()
+    report.switch_view("history")
+    assert report.active_lens() == "Whole map"
+    assert report.legend_entry_is_button("Never")
+    total, never = report.total_node_count(), report.page.evaluate("histSummary().never")
+    report.toggle_legend_chip("Never")
+    report.wait_settled()
+    assert report.visible_node_count() == total - never == 9     # 2 hot + 7 once
+    assert report.ghosts_in_physics() == 0
+    assert f"{never} never changed hidden" in report.lens_note()
+    report.toggle_legend_chip("Never")
+    report.wait_settled()
+    assert report.visible_node_count() == total
+
+
+def test_history_export_carries_change_history_and_a_hotspots_note(report):
+    import io
+    import zipfile
+    report.wait_history()
+    report.switch_view("history")
+    name, raw = report.export_obsidian()
+    assert name == "impact-1.0-vault.zip"
+    z = zipfile.ZipFile(io.BytesIO(raw))
+    names = z.namelist()
+    assert "Hotspots (last 3 releases).md" in names
+    hotspots = z.read("Hotspots (last 3 releases).md").decode("utf-8")
+    assert "| Repo | Hot | Once | Peak |" in hotspots
+    assert "### Changed in 2 of 3" in hotspots
+    checkout = next(n for n in names if n.startswith("Components/") and "heckout" in n)
+    note = z.read(checkout).decode("utf-8")
+    assert "changed-in: 2 of 3" in note
+    assert "## Change history" in note
+    assert "- Release 1.2: Touched" in note
+
+
+def test_lone_report_has_no_history_button(browser, shop_series_dir, tmp_path_factory):
+    lone_dir = tmp_path_factory.mktemp("lone-history")
+    shutil.copy(shop_series_dir / "impact-1.2.html", lone_dir / "impact-1.2.html")
+    r = ReportPage.open(browser, (lone_dir / "impact-1.2.html").resolve().as_uri())
+    try:
+        assert not r.history_button_visible()
+        assert r.page.evaluate("HISTORY") is None
+        assert r.page_errors() == []
+    finally:
+        r.close()
+
+
+def test_large_history_opens_in_context_and_hot_only_leaves_no_ghosts(large_report):
+    large_report.wait_history()
+    assert large_report.history_stop_count() == 5
+    large_report.switch_view("history")
+    assert large_report.active_lens() == "In context"
+    assert large_report.bubble_count() > 0
+    assert "with no hot component collapsed into bubbles" in large_report.lens_note()
+    hot = large_report.hot_node_count()
+    assert hot > 0
+    large_report.choose_lens("Hot only")
+    assert large_report.visible_node_count() == hot
+    assert large_report.ghosts_in_physics() == 0
+    assert large_report.children_in_physics() == 0
+    assert large_report.page_errors() == []

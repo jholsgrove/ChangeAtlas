@@ -179,6 +179,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         <button id="view-impact" title="The map shaded by this release: what changed, what was touched, and what sits next to it." aria-pressed="true" data-abbr="I">Impact</button>
         <button id="view-system" title="The architecture on its own, coloured by component type. No release shading." aria-pressed="false" data-abbr="S">System</button>
         <button id="view-list" title="The impacted components as a table, with their stories and pull requests." aria-pressed="false" data-abbr="L">List</button>
+        <button id="view-history" hidden title="How often each component changed across the releases in this folder: the hot spots, not one release." aria-pressed="false" data-abbr="H">History</button>
       </div>
     </h1>
     <div class="controls">
@@ -196,8 +197,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
       <div class="legend" id="legend"></div>
       <div id="roll-wrap">
         <table class="roll" id="roll-table" aria-label="Impact per repo">
-          <caption>Repos in this release</caption>
-          <thead><tr><th scope="col">Repo</th><th scope="col" title="Changed">Chg</th>
+          <caption id="roll-caption">Repos in this release</caption>
+          <thead id="roll-head"><tr><th scope="col">Repo</th><th scope="col" title="Changed">Chg</th>
             <th scope="col" title="Touched">Tch</th><th scope="col" title="Test-only">Tst</th>
             <th scope="col" title="Peripheral">Per</th></tr></thead>
           <tbody id="roll-body"></tbody>
@@ -235,6 +236,16 @@ let PALETTE = PALETTES[theme];
 const DATA = /*__DATA__*/;
 let currentRelease = DATA.release;    // label of the release the map is shaded by; the
                                        // slider (below) is the only thing that changes it
+// History view: the fold across every stop the slider loaded. Built by
+// buildHistory() once the sidecars are in; null for a lone report, which
+// then never shows the History button. freq[id] = how many of the stops
+// changed, touched or test-only'd the node. Peripheral is proximity to a
+// change, not a change, so it does not count (the same line hasEvidence and
+// the Release only lens draw). Hot = changed in K_HOT or more stops.
+let HISTORY = null;
+const K_HOT = 2;
+const histFreq = id => HISTORY ? (HISTORY.freq[id] || 0) : 0;
+const historyFill = f => PALETTE.history.fills[Math.min(f, PALETTE.history.fills.length) - 1];
 // Large-graph handling. Above the threshold the report opens on the In
 // context lens (untouched repos as bubbles) and trades vis-network's slow
 // initial-layout pass and live physics for a settle-then-freeze cycle so a
@@ -285,16 +296,18 @@ function ownStateOf(id) {
        : OWN_PERIPHERAL.has(id) ? 'peripheral' : 'dimmed';
 }
 // Views: 'impact' (release shading, default), 'system' (plain architecture,
-// nodes coloured by type, no release overlay), 'list' (accessible table).
+// nodes coloured by type, no release overlay), 'list' (accessible table),
+// 'history' (nodes shaded by how many of the folder's releases changed them).
 let currentView = 'impact';
-// Legend pill filters: a filtered tier/type is dimmed in place, never removed.
-const filteredTiers = new Set(), filteredTypes = new Set();
+// Legend pill filters: a filtered tier/type/frequency is dimmed in place, never removed.
+const filteredTiers = new Set(), filteredTypes = new Set(), filteredFreq = new Set();
 const effectiveState = id => {
   const s = stateOf(id);
   return s !== 'dimmed' && filteredTiers.has(s) ? 'dimmed' : s;
 };
 const baseOpacity = id => {
   if (currentView === 'system') return filteredTypes.has(byId[id].type) ? 0.35 : 1;
+  if (currentView === 'history') { const f = histFreq(id); return f === 0 || filteredFreq.has(f) ? 0.35 : 1; }
   if (stateOf(id) === 'dimmed') return 0.35;
   return effectiveState(id) === 'dimmed' ? 0.35 : 1;
 };
@@ -337,7 +350,25 @@ function systemNodeVisual(n) {
     opacity: baseOpacity(n.id),
   };
 }
-const affected = id => effectiveState(id) !== 'dimmed';
+// History view: one violet hue, bucket f = changed in f of the loaded stops.
+// Never colour alone (WCAG 1.4.1): the border thickens with the count, and
+// the count is text in the legend, the panel and the hotspot table.
+function historyNodeVisual(n) {
+  const f = histFreq(n.id), hi = PALETTE.node_highlight_border;
+  const fill = f > 0 && !filteredFreq.has(f) ? historyFill(f) : null;
+  return {
+    color: fill
+      ? { background: fill, border: PALETTE.history.border, highlight: { background: fill, border: hi } }
+      : { background: IMPACT.dimmed.color, border: IMPACT.dimmed.color,
+          highlight: { background: IMPACT.dimmed.color, border: hi } },
+    borderWidth: fill ? f : 1,
+    shapeProperties: { borderDashes: false },
+    opacity: baseOpacity(n.id),
+  };
+}
+const affected = id => currentView === 'history'
+  ? histFreq(id) > 0 && !filteredFreq.has(histFreq(id))
+  : effectiveState(id) !== 'dimmed';
 function impactEdgeVisual(e) {
   return { color: (affected(e.from) && affected(e.to))
     ? { color: PALETTE.edge_affected, highlight: PALETTE.tiers.peripheral.fill, opacity: 0.9 }
@@ -410,9 +441,23 @@ function recount() {
   counts.dimmed = DATA.nodes.length - CHANGED.size - TOUCHED.size - TESTONLY.size - PERIPHERAL.size;
 }
 recount();
+// Frequency buckets over every node: how many are hot, changed once, never.
+function histSummary() {
+  const s = { hot: 0, once: 0, never: 0, byFreq: {} };
+  DATA.nodes.forEach(n => {
+    const f = histFreq(n.id);
+    s.byFreq[f] = (s.byFreq[f] || 0) + 1;
+    if (f >= K_HOT) s.hot++; else if (f > 0) s.once++; else s.never++;
+  });
+  return s;
+}
 function buildStats() {
+  const hs = currentView === 'history' ? histSummary() : null;
   document.getElementById('stats').textContent = currentView === 'system'
     ? DATA.nodes.length + ' components · ' + DATA.edges.length + ' dependencies'
+    : hs
+    ? 'Last ' + HISTORY.n + ' releases · ' + hs.hot + ' hot (' + K_HOT + '+ releases) · ' +
+      hs.once + ' changed once · ' + hs.never + ' never changed'
     : (currentRelease === DATA.release ? 'Generated ' + DATA.generated
                                        : 'Showing release ' + currentRelease) + ' · ' +
       counts.changed + ' changed · ' + counts.touched + ' touched · ' +
@@ -463,6 +508,15 @@ function buildLegend() {
       legendChip(typeColor(t), ts.label + ' (' + typeCounts[t] + ')',
         filteredTypes.has(t), () => toggleFilter(filteredTypes, t));
     });
+  } else if (currentView === 'history') {
+    const hs = histSummary(), N = HISTORY ? HISTORY.n : 0;
+    for (let f = N; f >= 1; f--) {
+      legendChip(historyFill(f), 'In ' + f + ' of ' + N + ' (' + (hs.byFreq[f] || 0) + ')',
+        filteredFreq.has(f), () => toggleFilter(filteredFreq, f));
+    }
+    const never = 'Never (' + hs.never + ')';
+    if (untouchedToggleable()) legendChip(IMPACT.dimmed.color, never, hideUntouched, toggleUntouched);
+    else legendKey(IMPACT.dimmed.color, never);
   } else {
     Object.keys(IMPACT).forEach(k => {
       const text = IMPACT[k].label + ' (' + counts[k] + ')';
@@ -540,7 +594,9 @@ function showNode(id) {
   // throwing on TS[n.type] being undefined.
   const typeStyle = TS[n.type] || { label: n.type, color: '#8a949e' };
   // System view: architecture only — no tier badge, no release sections below.
-  const tierBadge = currentView === 'system' ? '' :
+  // History view: the tier is per release, so the badge gives way to the
+  // Change history section further down.
+  const tierBadge = currentView === 'system' || currentView === 'history' ? '' :
     ' <span class="badge" style="background:' + IMPACT[stateOf(id)].color + '">' +
     IMPACT[stateOf(id)].label + '</span>';
   h += '<div class="meta"><span class="badge" style="background:' + typeColor(n.type) + '">' +
@@ -552,7 +608,18 @@ function showNode(id) {
   if (inc.length) h += '<h4>Used by</h4><ul>' +
     inc.map(e => row(e.from, e.kind, e.note, 'in')).join('') + '</ul>';
   const own = currentRelease === DATA.release;
-  const det = currentView === 'system' ? null : tierCountsFor(id);
+  const det = currentView === 'system' || currentView === 'history' ? null : tierCountsFor(id);
+  if (currentView === 'history' && HISTORY) {
+    const rows = histRows(id), f = histFreq(id);
+    h += '<h4>Change history</h4><p class="hint">' + (f
+      ? 'Changed in ' + f + ' of the last ' + HISTORY.n + ' releases.'
+      : 'Not changed in the last ' + HISTORY.n + ' releases.') + '</p>';
+    // The report's own stop needs no link: this page is that report.
+    if (rows.length) h += '<ul>' + rows.map(r =>
+      '<li><span class="kind">Release ' + esc(r.label) + '</span>' + IMPACT[r.tier].label +
+      (r.counts ? ' <span class="empty">· ' + r.counts.prodFiles + ' prod, ' + r.counts.testFiles + ' test</span>' : '') +
+      (!r.own && r.report ? ' · <a href="' + esc(r.report) + '">report</a>' : '') + '</li>').join('') + '</ul>';
+  }
   if (det && (det.prodFiles || det.testFiles)) {
     h += '<h4>Change size</h4><ul><li>' + det.prodFiles + ' production file(s), ' +
          det.testFiles + ' test file(s) changed' + (own ? '' : ' in release ' + esc(currentRelease)) +
@@ -580,7 +647,7 @@ function showNode(id) {
       : 'Stories and pull requests are in the release ' + esc(currentRelease) +
         ' report, which is not in this folder.') + '</p>';
   }
-  if (currentView !== 'system' && stateOf(id) === 'peripheral') {
+  if (currentView === 'impact' && stateOf(id) === 'peripheral') {
     const near = network.getConnectedNodes(id).filter(o => CHANGED.has(o));
     if (near.length) {
       h += '<h4>Connected changed components</h4><ul>' + near.map(o =>
@@ -664,10 +731,17 @@ function repoSummary(key, state = stateOf) {
   (membersOf[key] || []).forEach(id => c[state(id)]++);
   return c;
 }
-const hasEvidence = key => {
-  const c = repoSummary(key);
-  return c.changed + c.touched + c.testOnly > 0;
-};
+// What the lens rules treat as a change depends on the view: a tier with
+// code evidence in Impact view, a hot component in History view. `tiered`
+// is what survives hiding: Release only keeps peripheral neighbours, Hot
+// only keeps only the hot, and the Never chip on History's Whole map hides
+// just the never-changed (so the cut there is one release, not K_HOT).
+const evident = id => currentView === 'history' ? histFreq(id) >= K_HOT
+  : ['changed', 'touched', 'testOnly'].includes(stateOf(id));
+const tiered = id => currentView === 'history'
+  ? histFreq(id) >= (lens.history === 'hot' ? K_HOT : 1)
+  : stateOf(id) !== 'dimmed';
+const hasEvidence = key => (membersOf[key] || []).some(evident);
 
 // ---- lenses: named canvas states, one remembered per view for the session.
 // `hide` — untouched nodes (and empty repo bubbles) leave the canvas.
@@ -688,13 +762,22 @@ const LENSES = {
     components: { label: 'Components', hide: false, rule: 'none',
                   desc: 'Every component, flat.' },
   },
+  history: {
+    hot:     { label: 'Hot only',   hide: true,  rule: 'evidence',
+               desc: 'Only components that changed in two or more of these releases, and their repos. The rest are hidden.' },
+    context: { label: 'In context', hide: false, rule: 'evidence',
+               desc: 'Everything flat. Repos with no hot component collapse into bubbles. Click a bubble to open it.' },
+    whole:   { label: 'Whole map',  hide: false, rule: 'none',
+               desc: 'Every component, shaded by how many of these releases changed it. Never-changed ones faded.' },
+  },
 };
 // Defaults come from size alone; nothing is remembered between opens.
 const DEFAULT_LENS = {
   impact: LARGE ? 'context' : 'whole',
   system: LARGE ? 'repos' : 'components',
+  history: LARGE ? 'context' : 'whole',
 };
-const lens = { impact: DEFAULT_LENS.impact, system: DEFAULT_LENS.system };
+const lens = { impact: DEFAULT_LENS.impact, system: DEFAULT_LENS.system, history: DEFAULT_LENS.history };
 const currentLens = () => LENSES[currentView] && LENSES[currentView][lens[currentView]];
 const collapsed = new Set();
 
@@ -702,32 +785,43 @@ const collapsed = new Set();
 // Impact view a filtered Peripheral tier turns an amber bubble plain; in
 // System view a filtered Repo type dims it like any other filtered type.
 function bubbleStyle(key) {
-  const system = currentView === 'system';
-  const c = repoSummary(key), n = (membersOf[key] || []).length;
-  const periph = !system && c.peripheral > 0 && !filteredTiers.has('peripheral');
+  const system = currentView === 'system', hist = currentView === 'history';
+  const members = membersOf[key] || [];
+  const c = repoSummary(key), n = members.length;
+  const periph = !system && !hist && c.peripheral > 0 && !filteredTiers.has('peripheral');
   const faded = system && filteredTypes.has('repo');
+  // History view: a bubble stands for a repo with no hot component; if
+  // anything inside changed at all it takes the history border and says how
+  // many, with the hottest count inside (the peak).
+  const peak = hist ? Math.max(0, ...members.map(histFreq)) : 0;
+  const warm = peak > 0 && !filteredFreq.has(peak);
   const fill = system ? (faded ? PALETTE.dimmed : typeColor('repo'))
              : periph ? PALETTE.bubble_peripheral : PALETTE.bubble;
   const border = system ? fill
-               : periph ? PALETTE.tiers.peripheral.border : PALETTE.bubble_border;
+               : periph ? PALETTE.tiers.peripheral.border
+               : warm ? PALETTE.history.border : PALETTE.bubble_border;
   // WCAG 1.4.1: a peripheral bubble carries the tier's dash pattern and says
   // so in its label, never colour alone.
-  const label = repoTitle(key) + '\n' + (c.peripheral > 0 && !system
+  const label = repoTitle(key) + '\n' + (hist
+    ? (peak > 0 ? members.filter(id => histFreq(id) > 0).length + ' changed · peak ' + peak + ' of ' + HISTORY.n
+                : n + ' components')
+    : c.peripheral > 0 && !system
     ? c.peripheral + ' peripheral · ' + (n - c.peripheral) + ' more'
     : n + ' components');
   // Release only lens: a bubble whose repo has nothing in the release at all is
   // untouched in bulk and goes with it; a bubble holding peripheral (or, in
   // System view, any tiered) members stays as the summary of what's left.
-  const tiered = c.changed + c.touched + c.testOnly + c.peripheral > 0;
+  // Hot only: only a bubble with a hot member stays.
+  const keep = members.some(tiered);
   return {
     label,
     color: { background: fill, border, highlight: { background: fill, border: PALETTE.node_highlight_border } },
-    borderWidth: periph ? 2 : 1,
+    borderWidth: periph || warm ? 2 : 1,
     shapeProperties: { borderDashes: periph ? PALETTE.tiers.peripheral.borderDashes : false },
     font: { color: PALETTE.text, size: 12 },
     opacity: faded ? 0.35 : 1,
-    hidden: hideUntouched && !tiered,
-    physics: !(hideUntouched && !tiered),   // a hidden bubble must stop repelling the survivors too
+    hidden: hideUntouched && !keep,
+    physics: !(hideUntouched && !keep),   // a hidden bubble must stop repelling the survivors too
   };
 }
 function bubbleOpacity(key) { return bubbleStyle(key).opacity; }
@@ -800,7 +894,7 @@ function focusRepo(key) {
 // ordinary central gravity. Leaving the lens restores physics and the map
 // spreads out again (settling nearby, not on the exact old positions). ----
 let hideUntouched = false;
-const gone = id => hideUntouched && stateOf(id) === 'dimmed';
+const gone = id => hideUntouched && !tiered(id);
 // Take every ghost out of the simulation. Runs on the toggle and again after
 // any bubble opens or closes, because vis switches physics back on for the
 // nodes and edges a cluster releases.
@@ -895,6 +989,14 @@ function describeLens() {
   if (currentView === 'system') {
     what = L.rule === 'all' ? plural(collapsed.size, 'repo') + ' as bubbles. Click one to open it.'
                             : 'All ' + plural(total, 'component') + ', flat.';
+  } else if (currentView === 'history') {
+    const N = HISTORY ? HISTORY.n : 0;
+    if (L.hide) what = plural(total - hidden, 'component') + ' hot in the last ' + N + ' releases shown, ' + hidden + ' hidden.';
+    else if (L.rule === 'evidence') what = collapsed.size
+      ? plural(collapsed.size, 'repo') + ' with no hot component collapsed into bubbles, ' + plural(inside, 'component') + ' inside.'
+      : 'Every repo has a hot component, so nothing collapsed.';
+    else what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + hidden + ' never changed hidden.'
+                              : 'All ' + plural(total, 'component') + ', ' + histSummary().never + ' never changed faded.';
   } else if (L.hide) {
     what = plural(total - hidden, 'component') + ' in this release shown, ' + hidden + ' untouched hidden.';
   } else if (L.rule === 'evidence') {
@@ -923,11 +1025,14 @@ function applyLens(name, { keepView = false } = {}) {
 // already hidden them; In context plus hiding is just Release only). The lens
 // indicator stays put: this is a refinement, undone by re-clicking the lens
 // or by Reset.
-const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole';
+// History's Whole map has the same one place, where the entry is Never.
+const untouchedToggleable = () => (currentView === 'impact' && lens.impact === 'whole')
+                               || (currentView === 'history' && lens.history === 'whole');
 function toggleUntouched() {
   hideUntouched = !hideUntouched;
   buildLegend();
-  settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');
+  const word = currentView === 'history' ? 'Never-changed' : 'Untouched';
+  settleCanvas(hideUntouched ? word + ' hidden' : word + ' shown');
 }
 // Shared tail of a lens change and the Untouched toggle: ghosts out of (or
 // back into) physics, bubbles restyled, survivors packed when hiding, then
@@ -954,7 +1059,8 @@ function buildLensRow() {
   lensNote.hidden = !set;
   lensRow.textContent = '';
   if (!set) return;
-  lensRow.setAttribute('aria-label', currentView === 'impact' ? 'Impact lens' : 'System lens');
+  lensRow.setAttribute('aria-label', currentView === 'impact' ? 'Impact lens'
+                                   : currentView === 'history' ? 'History lens' : 'System lens');
   Object.keys(set).forEach(name => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -974,24 +1080,42 @@ function updateLensPressed() {
   lensCaption.textContent = L ? L.desc : '';
 }
 
-// ---- per-repo roll-up (side panel in Impact view; List view always) ----
+// ---- per-repo roll-up (side panel in Impact view; List view always) and,
+// in History view, the hotspot table: repos ranked by their hottest component.
+// A row carries `cells` (the numeric columns) and `quiet` (muted styling).
 function rollRows(state = stateOf) {
   return Object.keys(membersOf)
     .map(key => ({ key, title: repoTitle(key), c: repoSummary(key, state) }))
     .filter(r => r.c.changed + r.c.touched + r.c.testOnly + r.c.peripheral > 0)
     .sort((a, b) => (b.c.changed - a.c.changed) || (b.c.touched - a.c.touched) ||
                     (b.c.testOnly - a.c.testOnly) || (b.c.peripheral - a.c.peripheral) ||
-                    a.title.localeCompare(b.title));
+                    a.title.localeCompare(b.title))
+    .map(r => Object.assign(r, { cells: [r.c.changed, r.c.touched, r.c.testOnly, r.c.peripheral],
+                                 quiet: r.c.changed + r.c.touched + r.c.testOnly === 0 }));
+}
+function hotspotRows() {
+  return Object.keys(membersOf)
+    .map(key => {
+      const fs = (membersOf[key] || []).map(histFreq);
+      return { key, title: repoTitle(key),
+               hot: fs.filter(f => f >= K_HOT).length,
+               once: fs.filter(f => f > 0 && f < K_HOT).length,
+               peak: Math.max(0, ...fs) };
+    })
+    .filter(r => r.peak > 0)
+    .sort((a, b) => (b.peak - a.peak) || (b.hot - a.hot) || (b.once - a.once) ||
+                    a.title.localeCompare(b.title))
+    .map(r => Object.assign(r, { cells: [r.hot, r.once, r.peak], quiet: r.hot === 0 }));
 }
 function fillRollBody(tbody, rows, clickable) {
   tbody.textContent = '';
   rows.forEach(r => {
     const tr = document.createElement('tr');
-    if (r.c.changed + r.c.touched + r.c.testOnly === 0) tr.classList.add('periph-only');
+    if (r.quiet) tr.classList.add('periph-only');
     if (clickable) tr.classList.add('clickable');
     const th = document.createElement('th'); th.scope = 'row'; th.textContent = r.title;
     tr.appendChild(th);
-    [r.c.changed, r.c.touched, r.c.testOnly, r.c.peripheral].forEach(v => {
+    r.cells.forEach(v => {
       const td = document.createElement('td');
       td.textContent = v; if (!v) td.className = 'zero';
       tr.appendChild(td);
@@ -1000,14 +1124,40 @@ function fillRollBody(tbody, rows, clickable) {
     tbody.appendChild(tr);
   });
 }
+// Caption and column headers for the side-panel table, per view.
+function rollHead(hist) {
+  const N = HISTORY ? HISTORY.n : 0;
+  return hist
+    ? { label: 'Hotspots per repo', caption: 'Hotspots across the last ' + N + ' releases',
+        cols: [['Repo'], ['Hot', 'Components changed in ' + K_HOT + ' or more of these releases'],
+               ['Once', 'Components changed in one of these releases'],
+               ['Peak', 'Most releases any one component in the repo changed in']] }
+    : { label: 'Impact per repo', caption: 'Repos in this release',
+        cols: [['Repo'], ['Chg', 'Changed'], ['Tch', 'Touched'], ['Tst', 'Test-only'], ['Per', 'Peripheral']] };
+}
+function setRollHead(hist) {
+  const head = rollHead(hist), tr = document.createElement('tr');
+  head.cols.forEach(([text, title]) => {
+    const th = document.createElement('th'); th.scope = 'col'; th.textContent = text;
+    if (title) th.title = title;
+    tr.appendChild(th);
+  });
+  document.getElementById('roll-caption').textContent = head.caption;
+  const thead = document.getElementById('roll-head');
+  thead.textContent = ''; thead.appendChild(tr);
+  document.getElementById('roll-table').setAttribute('aria-label', head.label);
+}
 function buildRoll() {
-  const rows = rollRows();
+  const hist = currentView === 'history';
+  const rows = hist ? hotspotRows() : rollRows();
+  setRollHead(hist);
   fillRollBody(document.getElementById('roll-body'), rows, true);
   const rest = Object.keys(membersOf).length - rows.length;
   document.getElementById('roll-more').textContent = rest === 0 ? '' :
-    rest + ' more repo' + (rest === 1 ? '' : 's') + ' with nothing in this release.';
-  // Every Impact lens; System view has no tiers to summarise, List has its own table.
-  document.getElementById('roll-wrap').hidden = currentView !== 'impact';
+    rest + ' more repo' + (rest === 1 ? '' : 's') + (hist
+      ? ' with nothing in the last ' + HISTORY.n + ' releases.' : ' with nothing in this release.');
+  // Every Impact and History lens; System view has no tiers to summarise, List has its own table.
+  document.getElementById('roll-wrap').hidden = !(currentView === 'impact' || hist);
 }
 
 // ---- search ----
@@ -1024,6 +1174,7 @@ document.getElementById('reset').onclick = () => {
   selected = null;
   filteredTiers.clear();
   filteredTypes.clear();
+  filteredFreq.clear();
   refreshVisuals();
   buildLegend();
   network.unselectAll();
@@ -1108,7 +1259,35 @@ function initReleaseSlider() {
       if (loaded.length < 2) return;
       STOPS = loaded;
       buildReleaseSlider();
+      buildHistory();
     });
+}
+// Fold the loaded stops into per-node history. One tier function per stop
+// (the report's own release reads DATA; the rest read their sidecar), a
+// frequency per node, and the History view button appears.
+function buildHistory() {
+  const stops = STOPS.map(s => {
+    const src = s.own ? { impact: DATA.impact, counts: DATA.details } : window.CHANGEATLAS_HISTORY[s.label];
+    const sets = ['changed', 'touched', 'testOnly', 'peripheral']
+      .map(k => [k, new Set(src.impact[k] || [])]);
+    return { label: s.label, own: s.own, report: s.report, counts: src.counts || {},
+             state: id => { const hit = sets.find(([, set]) => set.has(id)); return hit ? hit[0] : 'dimmed'; } };
+  });
+  const freq = {};
+  DATA.nodes.forEach(n => {
+    freq[n.id] = stops.filter(s => ['changed', 'touched', 'testOnly'].includes(s.state(n.id))).length;
+  });
+  HISTORY = { n: stops.length, stops, freq };
+  viewButtons.history.hidden = false;
+}
+// The stops that changed this node, newest first, with that stop's tier and counts.
+function histRows(id) {
+  if (!HISTORY) return [];
+  return HISTORY.stops.slice().reverse().map(s => {
+    const tier = s.state(id);
+    if (tier === 'dimmed') return null;
+    return { label: s.label, tier, counts: s.counts[id] || null, own: s.own, report: s.report };
+  }).filter(Boolean);
 }
 function buildReleaseSlider() {
   sliderInput.max = String(STOPS.length - 1);
@@ -1155,9 +1334,10 @@ sliderInput.addEventListener('input', () => {
 
 // ---- view switching: Impact | System | List ----
 const viewButtons = {
-  impact: document.getElementById('view-impact'),
-  system: document.getElementById('view-system'),
-  list:   document.getElementById('view-list'),
+  impact:  document.getElementById('view-impact'),
+  system:  document.getElementById('view-system'),
+  list:    document.getElementById('view-list'),
+  history: document.getElementById('view-history'),   // hidden until buildHistory()
 };
 function setView(v) {
   if (v === currentView) return;
@@ -1175,13 +1355,14 @@ function setView(v) {
   buildStats();
   buildLegend();
   buildLensRow();
-  document.getElementById('roll-wrap').hidden = v !== 'impact';
-  sliderBox.hidden = v !== 'impact' || STOPS.length < 2;
+  document.getElementById('roll-wrap').hidden = !(v === 'impact' || v === 'history');
+  sliderBox.hidden = v !== 'impact' || STOPS.length < 2;   // History is the fold across the stops, so no scrubber
   if (v !== 'list') applyLens(lens[v]);
 }
 function refreshVisuals() {
   const system = currentView === 'system';
-  const nodeVisual = system ? systemNodeVisual : impactNodeVisual;
+  const nodeVisual = system ? systemNodeVisual
+                   : currentView === 'history' ? historyNodeVisual : impactNodeVisual;
   visNodes.update(DATA.nodes.map(n => Object.assign({ id: n.id }, nodeVisual(n))));
   visEdges.update(DATA.edges.map((e, i) => Object.assign(
     { id: 'e' + i }, system ? systemEdgeVisual(e) : impactEdgeVisual(e))));
@@ -1190,6 +1371,7 @@ function refreshVisuals() {
 viewButtons.impact.addEventListener('click', () => setView('impact'));
 viewButtons.system.addEventListener('click', () => setView('system'));
 viewButtons.list.addEventListener('click', () => setView('list'));
+viewButtons.history.addEventListener('click', () => setView('history'));
 
 // ---- export to Obsidian: the map as a vault (folder of markdown notes),
 // downloaded as a store-only zip built right here — no libraries, so the
@@ -1226,6 +1408,7 @@ function noteFor(n, names, system) {
     L.push('tags:', '  - ' + sanitizeName(n.type));
   } else {
     L.push('tier: ' + (tier === 'dimmed' ? 'untouched' : tier));
+    if (HISTORY) L.push('changed-in: ' + histFreq(n.id) + ' of ' + HISTORY.n);
     if (tier !== 'dimmed') L.push('tags:', '  - ' + tier);
   }
   L.push('---', '');
@@ -1246,6 +1429,31 @@ function noteFor(n, names, system) {
     L.push('## Pull requests', '');
     det.prs.forEach(p =>
       L.push('- ' + p.repo + ' [!' + p.id + ' ' + mdLinkText(p.title) + '](' + safeUrl(p.url) + ')'));
+    L.push('');
+  }
+  // A series folder: the same per-release history the History view shows.
+  const rows = system ? [] : histRows(n.id);
+  if (rows.length) {
+    L.push('## Change history', '',
+           'Changed in ' + histFreq(n.id) + ' of the last ' + HISTORY.n + ' releases.', '');
+    rows.forEach(r => L.push('- Release ' + r.label + ': ' + IMPACT[r.tier].label +
+      (r.counts ? ' (' + r.counts.prodFiles + ' prod, ' + r.counts.testFiles + ' test files)' : '')));
+    L.push('');
+  }
+  return L.join('\n');
+}
+function hotspotsNote(names) {
+  const cell = s => String(s).replace(/\|/g, '/');
+  const L = ['# Hotspots — last ' + HISTORY.n + ' releases', '',
+             'Releases ' + HISTORY.stops.map(s => s.label).join(', ') + ' — exported from ChangeAtlas.', '',
+             '## Repos', '', '| Repo | Hot | Once | Peak |', '|---|---|---|---|'];
+  hotspotRows().forEach(r => L.push('| ' + cell(r.title) + ' | ' + r.hot + ' | ' + r.once + ' | ' + r.peak + ' |'));
+  L.push('', '## Components', '');
+  for (let f = HISTORY.n; f >= 1; f--) {
+    const ids = DATA.nodes.filter(n => histFreq(n.id) === f).map(n => n.id);
+    if (!ids.length) continue;
+    L.push('### Changed in ' + f + ' of ' + HISTORY.n, '');
+    ids.forEach(id => L.push('- ' + wikiLink(names[id] || id)));
     L.push('');
   }
   return L.join('\n');
@@ -1298,6 +1506,7 @@ function buildVaultFiles() {
       : { path: 'Release ' + sanitizeName(DATA.release) + '.md', content: indexNote(names) },
     { path: '.obsidian/graph.json', content: JSON.stringify(graphPreset(system), null, 2) },
   ];
+  if (!system && HISTORY) files.push({ path: 'Hotspots (last ' + HISTORY.n + ' releases).md', content: hotspotsNote(names) });
   DATA.nodes.forEach(n =>
     files.push({ path: 'Components/' + names[n.id] + '.md', content: noteFor(n, names, system) }));
   return files;

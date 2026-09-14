@@ -281,7 +281,7 @@ def test_lens_row_scaffolding_present():
     assert ".side.collapsed .lenses,.side.collapsed #lens-caption{display:none}" in html
 
 
-def test_lens_table_has_exactly_the_five_lenses():
+def test_lens_table_has_exactly_the_eight_lenses():
     html = _render()
     for row in (
         "release: { label: 'Release only', hide: true,  rule: 'evidence',",
@@ -289,15 +289,20 @@ def test_lens_table_has_exactly_the_five_lenses():
         "whole:   { label: 'Whole map',    hide: false, rule: 'none',",
         "repos:      { label: 'Repos',      hide: false, rule: 'all',",
         "components: { label: 'Components', hide: false, rule: 'none',",
+        # History view: Hot only is Release only's analogue (hide the rest).
+        "hot:     { label: 'Hot only',   hide: true,  rule: 'evidence',",
+        "context: { label: 'In context', hide: false, rule: 'evidence',",
+        "whole:   { label: 'Whole map',  hide: false, rule: 'none',",
     ):
         assert row in html
-    assert html.count("hide: ") == 5
+    assert html.count("hide: ") == 8
 
 
 def test_lens_defaults_by_size_and_nothing_remembered():
     html = _render()
     assert "impact: LARGE ? 'context' : 'whole'" in html
     assert "system: LARGE ? 'repos' : 'components'" in html
+    assert "history: LARGE ? 'context' : 'whole'" in html
     assert "changeatlas-group:" not in html
 
 
@@ -368,7 +373,7 @@ def test_view_buttons_have_tooltips():
 
 def test_lens_caption_and_tooltips_come_from_the_lens_table():
     html = _render()
-    assert html.count("desc: '") == 5
+    assert html.count("desc: '") == 8   # three Impact, two System, three History
     assert 'class="hint" id="lens-caption"' in html
     assert "b.title = set[name].desc" in html
     assert "lensCaption.textContent = " in html
@@ -402,8 +407,11 @@ def test_hidden_bubbles_leave_physics_and_ghosts_are_reapplied_on_resettle():
     assert "physics: !gone(n.id)" in html[i:i + 400]
     assert "physics: edgePhysics(e)" in html[i:i + 900]
     b = html[html.index("function bubbleStyle(key)"):html.index("function bubbleOpacity")]
-    assert "hidden: hideUntouched && !tiered" in b
-    assert "physics: !(hideUntouched && !tiered)" in b
+    # `keep` = the bubble has a member the hiding lens keeps (tiered in Impact
+    # view, hot in History view); an all-untouched bubble leaves physics too.
+    assert "const keep = members.some(tiered);" in b
+    assert "hidden: hideUntouched && !keep" in b
+    assert "physics: !(hideUntouched && !keep)" in b
     j = html.index("function resettle(iterations, message)")
     assert "if (hideUntouched) applyGhostPhysics();" in html[j:j + 200]
 
@@ -427,13 +435,13 @@ def test_view_switch_applies_that_views_lens():
     assert "if (v !== 'list') applyLens(lens[v]);" in body
 
 
-def test_roll_up_shows_in_every_impact_lens():
+def test_roll_up_shows_in_every_impact_and_history_lens():
     html = _render()
     assert 'id="roll-wrap"' in html
     i = html.index("function buildRoll()")
-    assert "document.getElementById('roll-wrap').hidden = currentView !== 'impact';" in html[i:i + 700]
+    assert "document.getElementById('roll-wrap').hidden = !(currentView === 'impact' || hist);" in html[i:i + 900]
     j = html.index("function setView(v)")
-    assert "document.getElementById('roll-wrap').hidden = v !== 'impact';" in html[j:j + 900]
+    assert "document.getElementById('roll-wrap').hidden = !(v === 'impact' || v === 'history');" in html[j:j + 900]
 
 
 def test_grouping_uses_native_clustering_keyed_by_repo():
@@ -464,7 +472,7 @@ def test_roll_up_tables_present_and_accessible():
     assert 'id="roll-body"' in html and 'id="roll-more"' in html
     assert 'id="list-repos"' in html and 'id="list-repos-body"' in html
     # both roll-up tables have a caption and column scopes like the component table
-    assert html.count("<caption>") >= 3
+    assert html.count("<caption") >= 3
     assert html.count('scope="col">Repo</th>') == 2
 
 
@@ -488,9 +496,14 @@ def test_untouched_legend_entry_is_a_toggle_only_on_whole_map():
     # one place the Untouched entry hides and shows them. On Release only they
     # are already gone; on In context hiding them would just be Release only.
     html = _render()
-    assert "const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole'" in html
+    assert "const untouchedToggleable = () => (currentView === 'impact' && lens.impact === 'whole')" in html
+    assert "|| (currentView === 'history' && lens.history === 'whole')" in html
+    # History's Never entry follows the same rule, and the hiding cut on Whole
+    # map is one release (Hot only's cut stays K_HOT).
+    assert "if (untouchedToggleable()) legendChip(IMPACT.dimmed.color, never, hideUntouched, toggleUntouched);" in html
+    assert "histFreq(id) >= (lens.history === 'hot' ? K_HOT : 1)" in html
     j = html.index("function buildLegend()")
-    body = html[j:j + 900]
+    body = html[j:j + 1600]
     assert "else if (untouchedToggleable()) legendChip(IMPACT[k].color, text, hideUntouched, toggleUntouched);" in body
     assert "else legendKey(IMPACT[k].color, text);" in body
     i = html.index("function legendKey(color, text)")
@@ -514,7 +527,10 @@ def test_untouched_toggle_flips_hide_and_settles():
     body = html[i:i + 300]
     assert "hideUntouched = !hideUntouched;" in body
     assert "buildLegend();" in body
-    assert "settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');" in body
+    # The live-region label names the entry the reader pressed: Untouched in
+    # Impact view, Never-changed in History view.
+    assert "const word = currentView === 'history' ? 'Never-changed' : 'Untouched';" in body
+    assert "settleCanvas(hideUntouched ? word + ' hidden' : word + ' shown');" in body
 
 
 def test_untouched_fade_filter_is_gone():
@@ -586,3 +602,43 @@ def test_own_release_classifier_pins_export_and_list_view_to_this_report():
     j = html.index("function ", i + 10)
     assert "rollRows(ownStateOf)" in html[i:j]
     assert "ownStateOf(n.id)" in html
+
+
+# ---- History view (fourth view button; appears once the series' sidecars load) ----
+
+def test_history_view_button_present_but_hidden_until_the_series_loads():
+    html = _render()
+    # The button ships hidden: a lone report (no releases.js, or one stop)
+    # never shows it, the same rule that hides the slider.
+    assert 'id="view-history"' in html
+    assert 'data-abbr="H"' in html
+    i = html.index('id="view-history"')
+    assert 'hidden' in html[i:html.index('>', i)]
+    assert "viewButtons.history.hidden = false" in html
+
+
+def test_history_view_wiring_present():
+    html = _render()
+    assert "function historyNodeVisual" in html
+    assert "setView('history')" in html or 'setView("history")' in html
+    # Frequency = stops where the node was changed, touched or test-only;
+    # peripheral is proximity, not change, so it does not count.
+    assert "const K_HOT = 2" in html
+    assert "PALETTE.history.fills[" in html
+    # Not colour alone: the bucket also drives border width, and the count is
+    # text in the legend, the panel and the hotspot table.
+    assert "borderWidth: fill ? f : 1" in html
+
+
+def test_history_lenses_present():
+    html = _render()
+    for label in ("Hot only", "In context", "Whole map"):
+        assert label in html
+    assert "history: {" in html            # LENSES.history
+    assert "'History lens'" in html
+
+
+def test_roll_up_is_a_hotspot_table_in_history_view():
+    html = _render()
+    assert "Hotspots" in html
+    assert "hotspotRows" in html

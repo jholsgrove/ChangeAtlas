@@ -61,6 +61,16 @@ PALETTE = {
     "bubble": "#23282d",
     "bubble_border": "#4a5058",
     "bubble_peripheral": "#4a4512",
+    # History view: one violet hue in five buckets, bucket i = changed in i of
+    # the last five releases. Brighter is hotter on the dark canvas (luminance
+    # climbs monotonically; tests/test_palette.py::test_history_fills_read_as_a_ramp).
+    # Every fill clears 3:1 against `bg` (WCAG 1.4.11). Frequency is also
+    # carried by border width on the node and by text in the panel, legend
+    # and hotspot table, never by colour alone.
+    "history": {
+        "fills": ["#ae2ec2", "#c441d8", "#d15fe3", "#de7ded", "#eeaaf8"],
+        "border": "#f2c8f9",
+    },
 }
 
 LIGHT_PALETTE = {
@@ -91,6 +101,12 @@ LIGHT_PALETTE = {
     "bubble": "#e3e7eb",
     "bubble_border": "#9aa3ad",
     "bubble_peripheral": "#ece5b0",
+    # Same violet hue as the dark ramp, running darker as it gets hotter so it
+    # reads against the light canvas (luminance falls monotonically).
+    "history": {
+        "fills": ["#bb6bc7", "#ae40bf", "#932fa2", "#762183", "#53145d"],
+        "border": "#450e4e",
+    },
 }
 
 THEMES = {"dark": PALETTE, "light": LIGHT_PALETTE}

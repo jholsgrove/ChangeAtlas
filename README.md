@@ -227,13 +227,16 @@ the five most recent releases in that folder. Each stop repaints the same
 atlas with that release's shading; flick between two stops and you have the
 diff. A folder with one report shows no slider.
 
-Every render leaves two things beside `impact-<label>.html`:
+Every render leaves three things beside `impact-<label>.html`:
 
 - `impact-<label>.history.js` — that release's four tier lists and per-node
   file counts. Node ids only: no stories, PRs, titles or URLs.
 - `releases.js` — the series manifest: the five most recent releases by
   **fetch date** (`fetched_at` in the release-data file, never the label),
   each with its sidecar and, where the file exists, its report.
+- `latest.html` — a redirect to the newest release in the manifest that has
+  a report, so another page can link to the series without knowing its
+  labels. Rewritten on every render.
 
 Sidecars are recomputed for every cached release on every render, against
 the current atlas and globs, so an atlas change never leaves stale ids
@@ -247,6 +250,33 @@ detail panel shows the tier and change size and links to that release's own
 report for its stories and pull requests. List view and Export to Obsidian
 always show the report's own release. `--anonymize` writes no sidecar, does
 not rewrite the manifest, and the report ignores one it finds.
+
+### History view (the hot spots)
+
+Where the slider shows one release at a time, the **History** view button
+(it appears once the series has loaded; a lone report never shows it) folds
+the whole series together: each component is shaded by how many of those
+releases changed, touched or test-only'd it, one violet hue in up to five
+buckets, brighter (dark theme) or darker (light theme) the more often it
+moved. Peripheral is proximity, not change, so it does not count. A
+component that changed in two or more of the releases is **hot**.
+
+- The legend has one chip per count ("In 2 of 5") and a Never key; chips
+  filter like the tier chips do.
+- The side-panel table becomes a hotspot table: repos ranked by the hottest
+  component inside them, with how many components were hot, how many changed
+  once, and the peak count.
+- The detail panel lists every release that changed the component, newest
+  first, with its tier and file counts, linking to that release's report
+  where it sits beside this one.
+- Three lenses: **Hot only** keeps only hot components (the analogue of
+  Release only), **In context** collapses repos with no hot component into
+  bubbles, **Whole map** shows everything with never-changed components
+  faded. A large map opens In context, as Impact does.
+- Export to Obsidian from a series adds a `## Change history` section to
+  each component note, a `changed-in` frontmatter field, and a Hotspots
+  index note. The slider itself is hidden in History view: History is the
+  fold across the stops, not another stop.
 
 ## Anonymised demos
 
@@ -262,7 +292,8 @@ sizes are preserved — this is for sharing a real release's *shape* without
 sharing its content. An anonymised render writes no history sidecar and does
 not rewrite the manifest, and the anonymised report ignores any manifest it
 finds, so the single HTML file carries and shows nothing real. Earlier real
-renders' `release-*-data.json`, `impact-*.history.js` and `releases.js` may
+renders' `release-*-data.json`, `impact-*.history.js`, `releases.js` and
+`latest.html` may
 still be in the same `out/` folder, so share the one file, not the folder.
 
 ## License
