@@ -496,7 +496,12 @@ def test_untouched_legend_entry_is_a_toggle_only_on_whole_map():
     # one place the Untouched entry hides and shows them. On Release only they
     # are already gone; on In context hiding them would just be Release only.
     html = _render()
-    assert "const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole'" in html
+    assert "const untouchedToggleable = () => (currentView === 'impact' && lens.impact === 'whole')" in html
+    assert "|| (currentView === 'history' && lens.history === 'whole')" in html
+    # History's Never entry follows the same rule, and the hiding cut on Whole
+    # map is one release (Hot only's cut stays K_HOT).
+    assert "if (untouchedToggleable()) legendChip(IMPACT.dimmed.color, never, hideUntouched, toggleUntouched);" in html
+    assert "histFreq(id) >= (lens.history === 'hot' ? K_HOT : 1)" in html
     j = html.index("function buildLegend()")
     body = html[j:j + 1600]
     assert "else if (untouchedToggleable()) legendChip(IMPACT[k].color, text, hideUntouched, toggleUntouched);" in body
@@ -522,7 +527,10 @@ def test_untouched_toggle_flips_hide_and_settles():
     body = html[i:i + 300]
     assert "hideUntouched = !hideUntouched;" in body
     assert "buildLegend();" in body
-    assert "settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');" in body
+    # The live-region label names the entry the reader pressed: Untouched in
+    # Impact view, Never-changed in History view.
+    assert "const word = currentView === 'history' ? 'Never-changed' : 'Untouched';" in body
+    assert "settleCanvas(hideUntouched ? word + ' hidden' : word + ' shown');" in body
 
 
 def test_untouched_fade_filter_is_gone():

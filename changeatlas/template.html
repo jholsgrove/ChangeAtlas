@@ -514,7 +514,9 @@ function buildLegend() {
       legendChip(historyFill(f), 'In ' + f + ' of ' + N + ' (' + (hs.byFreq[f] || 0) + ')',
         filteredFreq.has(f), () => toggleFilter(filteredFreq, f));
     }
-    legendKey(IMPACT.dimmed.color, 'Never (' + hs.never + ')');
+    const never = 'Never (' + hs.never + ')';
+    if (untouchedToggleable()) legendChip(IMPACT.dimmed.color, never, hideUntouched, toggleUntouched);
+    else legendKey(IMPACT.dimmed.color, never);
   } else {
     Object.keys(IMPACT).forEach(k => {
       const text = IMPACT[k].label + ' (' + counts[k] + ')';
@@ -731,11 +733,14 @@ function repoSummary(key, state = stateOf) {
 }
 // What the lens rules treat as a change depends on the view: a tier with
 // code evidence in Impact view, a hot component in History view. `tiered`
-// is what survives a hiding lens (Release only keeps peripheral neighbours;
-// Hot only keeps only the hot).
+// is what survives hiding: Release only keeps peripheral neighbours, Hot
+// only keeps only the hot, and the Never chip on History's Whole map hides
+// just the never-changed (so the cut there is one release, not K_HOT).
 const evident = id => currentView === 'history' ? histFreq(id) >= K_HOT
   : ['changed', 'touched', 'testOnly'].includes(stateOf(id));
-const tiered = id => currentView === 'history' ? histFreq(id) >= K_HOT : stateOf(id) !== 'dimmed';
+const tiered = id => currentView === 'history'
+  ? histFreq(id) >= (lens.history === 'hot' ? K_HOT : 1)
+  : stateOf(id) !== 'dimmed';
 const hasEvidence = key => (membersOf[key] || []).some(evident);
 
 // ---- lenses: named canvas states, one remembered per view for the session.
@@ -990,7 +995,8 @@ function describeLens() {
     else if (L.rule === 'evidence') what = collapsed.size
       ? plural(collapsed.size, 'repo') + ' with no hot component collapsed into bubbles, ' + plural(inside, 'component') + ' inside.'
       : 'Every repo has a hot component, so nothing collapsed.';
-    else what = 'All ' + plural(total, 'component') + ', ' + histSummary().never + ' never changed faded.';
+    else what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + hidden + ' never changed hidden.'
+                              : 'All ' + plural(total, 'component') + ', ' + histSummary().never + ' never changed faded.';
   } else if (L.hide) {
     what = plural(total - hidden, 'component') + ' in this release shown, ' + hidden + ' untouched hidden.';
   } else if (L.rule === 'evidence') {
@@ -1019,11 +1025,14 @@ function applyLens(name, { keepView = false } = {}) {
 // already hidden them; In context plus hiding is just Release only). The lens
 // indicator stays put: this is a refinement, undone by re-clicking the lens
 // or by Reset.
-const untouchedToggleable = () => currentView === 'impact' && lens.impact === 'whole';
+// History's Whole map has the same one place, where the entry is Never.
+const untouchedToggleable = () => (currentView === 'impact' && lens.impact === 'whole')
+                               || (currentView === 'history' && lens.history === 'whole');
 function toggleUntouched() {
   hideUntouched = !hideUntouched;
   buildLegend();
-  settleCanvas(hideUntouched ? 'Untouched hidden' : 'Untouched shown');
+  const word = currentView === 'history' ? 'Never-changed' : 'Untouched';
+  settleCanvas(hideUntouched ? word + ' hidden' : word + ' shown');
 }
 // Shared tail of a lens change and the Untouched toggle: ghosts out of (or
 // back into) physics, bubbles restyled, survivors packed when hiding, then

@@ -534,7 +534,7 @@ def test_history_view_appears_with_the_series_and_shades_by_frequency(report):
     assert any(c.startswith("In 1 of 3 (7)") for c in chips)
     assert any(c.startswith("Never (") for c in chips)
     assert report.legend_entry_is_button("In 2 of 3")
-    assert not report.legend_entry_is_button("Never")
+    assert report.legend_entry_is_button("Never")     # a toggle on Whole map, like Untouched
     assert report.page_errors() == []
 
 
@@ -563,8 +563,27 @@ def test_history_hot_only_keeps_only_the_hot(report):
     assert report.visible_node_count() == report.hot_node_count() == 2
     assert report.ghosts_in_physics() == 0
     assert "2 components hot in the last 3 releases shown" in report.lens_note()
+    assert not report.legend_entry_is_button("Never"), "Hot only already hides the never-changed"
     report.choose_lens("Whole map")
     assert report.visible_node_count() == report.total_node_count()
+
+
+def test_history_never_chip_hides_and_shows_the_never_changed_on_whole_map(report):
+    # The analogue of Impact view's Untouched chip: a toggle on Whole map only,
+    # and it hides just the never-changed, not the once-changed.
+    report.wait_history()
+    report.switch_view("history")
+    assert report.active_lens() == "Whole map"
+    assert report.legend_entry_is_button("Never")
+    total, never = report.total_node_count(), report.page.evaluate("histSummary().never")
+    report.toggle_legend_chip("Never")
+    report.wait_settled()
+    assert report.visible_node_count() == total - never == 9     # 2 hot + 7 once
+    assert report.ghosts_in_physics() == 0
+    assert f"{never} never changed hidden" in report.lens_note()
+    report.toggle_legend_chip("Never")
+    report.wait_settled()
+    assert report.visible_node_count() == total
 
 
 def test_history_export_carries_change_history_and_a_hotspots_note(report):
