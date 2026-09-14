@@ -251,6 +251,33 @@ report for its stories and pull requests. List view and Export to Obsidian
 always show the report's own release. `--anonymize` writes no sidecar, does
 not rewrite the manifest, and the report ignores one it finds.
 
+### History view (the hot spots)
+
+Where the slider shows one release at a time, the **History** view button
+(it appears once the series has loaded; a lone report never shows it) folds
+the whole series together: each component is shaded by how many of those
+releases changed, touched or test-only'd it, one violet hue in up to five
+buckets, brighter (dark theme) or darker (light theme) the more often it
+moved. Peripheral is proximity, not change, so it does not count. A
+component that changed in two or more of the releases is **hot**.
+
+- The legend has one chip per count ("In 2 of 5") and a Never key; chips
+  filter like the tier chips do.
+- The side-panel table becomes a hotspot table: repos ranked by the hottest
+  component inside them, with how many components were hot, how many changed
+  once, and the peak count.
+- The detail panel lists every release that changed the component, newest
+  first, with its tier and file counts, linking to that release's report
+  where it sits beside this one.
+- Three lenses: **Hot only** keeps only hot components (the analogue of
+  Release only), **In context** collapses repos with no hot component into
+  bubbles, **Whole map** shows everything with never-changed components
+  faded. A large map opens In context, as Impact does.
+- Export to Obsidian from a series adds a `## Change history` section to
+  each component note, a `changed-in` frontmatter field, and a Hotspots
+  index note. The slider itself is hidden in History view: History is the
+  fold across the stops, not another stop.
+
 ## Anonymised demos
 
 ```sh
