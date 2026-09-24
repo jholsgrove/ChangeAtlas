@@ -119,6 +119,45 @@ def _hex_to_rgb(h):
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
 
 
+@pytest.fixture
+def laptop_report(browser, report_url):
+    """The report on a 1366x768 laptop screen, the commonest low-resolution size."""
+    r = ReportPage.open(browser, report_url, viewport=(1366, 768))
+    yield r
+    r.close()
+
+
+def test_selected_node_details_come_into_view_on_a_short_screen(laptop_report):
+    # The panel's controls are ~700 px tall; below them the details used to be
+    # squeezed to nothing and clipped, so a click looked like it did nothing.
+    laptop_report.search_for(laptop_report.page.evaluate(
+        "byId[DATA.impact.changed[0]].title"))
+    laptop_report.page.wait_for_selector("#detail-close")
+    assert laptop_report.top_of_in_view("#detail")
+
+
+@pytest.mark.parametrize("size", [(1366, 768), (1280, 720), (1024, 768)])
+def test_nothing_in_the_side_panel_is_out_of_reach_on_a_small_screen(browser, report_url, size):
+    r = ReportPage.open(browser, report_url, viewport=size)
+    try:
+        for sel in ("#reset", "#export-obsidian", "#export-png", ".side footer a"):
+            assert r.reachable(sel), sel
+    finally:
+        r.close()
+
+
+def test_side_panel_narrows_on_a_narrow_screen(browser, report_url):
+    r = ReportPage.open(browser, report_url, viewport=(1100, 800))
+    try:
+        assert r.side_panel_width() < 340
+        # ...and the per-repo table still fits: long repo names wrap rather
+        # than push the count columns off the panel's edge.
+        r.page.evaluate("document.querySelector('#roll-body th, #roll-body td').textContent = 'Highlight.Authentication.Service.Host'")
+        assert r.page.evaluate("(() => { const w = document.getElementById('roll-wrap'); return w.scrollWidth <= w.clientWidth; })()")
+    finally:
+        r.close()
+
+
 def test_collapsing_side_panel_resizes_graph_canvas(report):
     side_before = report.side_panel_width()
     canvas_before = report.canvas_width()

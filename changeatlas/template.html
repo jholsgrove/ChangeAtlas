@@ -18,7 +18,8 @@ font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;overflow:
 #graph{width:100%;height:100%;background:var(--bg)}
 .side{width:340px;flex:0 0 340px;border-left:1px solid var(--line);
 background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
-.side .pad{padding:16px 18px;overflow:auto;flex:1}
+.side-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column}
+.side .pad{padding:16px 18px;flex:1 0 auto}
 h1{font-size:15px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line);
 letter-spacing:.02em}
 h1 small{color:var(--muted);font-weight:400;font-size:12px;display:block;margin-top:2px}
@@ -36,7 +37,7 @@ border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;fl
 .side.collapsed .brand{flex-direction:column;align-items:center;gap:8px}
 .side.collapsed #side-toggle{order:-1}
 .side.collapsed #logo,.side.collapsed .brand > div,.side.collapsed .controls,
-.side.collapsed .pad,.side.collapsed footer{display:none}
+.side.collapsed .pad,.side.collapsed footer,.side.collapsed .side-scroll{display:none}
 .side.collapsed .views{flex-direction:column;margin-top:10px}
 .side.collapsed .views button{font-size:0;padding:6px 0}
 .side.collapsed .views button::before{content:attr(data-abbr);font-size:12px}
@@ -45,7 +46,22 @@ border-radius:6px;padding:4px 8px;cursor:pointer;font-size:14px;line-height:1;fl
 color:var(--muted);flex:0 0 auto}
 .side footer a{color:var(--accent);text-decoration:none}
 .side footer a:hover{text-decoration:underline}
-.controls{padding:12px 18px;border-bottom:1px solid var(--line)}
+.controls{padding:12px 18px;border-bottom:1px solid var(--line);flex:0 0 auto}
+/* Lower-resolution screens. Below the header everything scrolls as one
+   column (.side-scroll), so nothing is clipped; short screens also tighten
+   the spacing and drop the how-to hint, and narrow ones give the map more of
+   the width. The collapsed rail's two-class rules still win over these. */
+@media (max-height:860px){
+  h1{padding:10px 14px}
+  #logo{width:28px;height:28px;flex-basis:28px}
+  .controls{padding:8px 14px}
+  .side .pad{padding:10px 14px}
+  .side footer{padding:8px 14px}
+  .controls .hint.how{display:none}
+}
+@media (max-width:1200px){
+  .side{width:290px;flex-basis:290px}
+}
 .controls input,.controls select{width:100%;margin-bottom:8px;padding:7px 9px;
 background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:6px;font-size:13px}
 .legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
@@ -87,7 +103,8 @@ table.roll{width:100%;border-collapse:collapse;font-size:12px;font-variant-numer
 table.roll caption{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;
 color:var(--muted);padding-bottom:4px}
 table.roll th,table.roll td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
-table.roll th:first-child,table.roll td:first-child{text-align:left;font-weight:400}
+table.roll th:first-child,table.roll td:first-child{text-align:left;font-weight:400;
+white-space:normal;overflow-wrap:anywhere}
 table.roll thead th{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
 table.roll tbody tr.clickable{cursor:pointer}
 table.roll tbody tr.clickable:hover td,table.roll tbody tr.clickable:hover th{background:var(--bg)}
@@ -182,6 +199,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         <button id="view-history" hidden title="How often each component changed across the releases in this folder: the hot spots, not one release." aria-pressed="false" data-abbr="H">History</button>
       </div>
     </h1>
+    <div class="side-scroll" id="side-scroll">
     <div class="controls">
       <fieldset id="release-slider" hidden>
         <legend class="visually-hidden">Release shown on the map</legend>
@@ -205,7 +223,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
         </table>
         <div class="hint" id="roll-more"></div>
       </div>
-      <div class="hint">Hover a node to spotlight its links. Click a node for its stories and PRs. Click a bubble to open it.</div>
+      <div class="hint how">Hover a node to spotlight its links. Click a node for its stories and PRs. Click a bubble to open it.</div>
     </div>
     <div class="pad">
       <div class="detail" id="detail"><p class="empty">Select a node to see what it does and what it connects to.</p></div>
@@ -215,6 +233,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
     </div>
     <footer><a href="https://github.com/jholsgrove/ChangeAtlas" target="_blank"
       rel="noopener">ChangeAtlas on GitHub</a></footer>
+    </div>
   </aside>
 </div>
 <script>/*__VISLIB__*/</script>
@@ -676,7 +695,11 @@ function showNode(id) {
   spotlight(neighbours(id));
   // Focus management (WCAG 2.4.3): move focus into the panel that just opened.
   detail.setAttribute('tabindex', '-1');
-  detail.focus();
+  detail.focus({ preventScroll: true });
+  // On a short screen the details sit below the controls: bring them to the
+  // top of the panel, or the click looks like it did nothing.
+  const scroller = document.getElementById('side-scroll');
+  scroller.scrollTop += detail.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
 }
 // Drop the selection and its spotlight; the panel goes back to its prompt.
 function clearSelection() {
@@ -1127,7 +1150,12 @@ function fillRollBody(tbody, rows, clickable) {
     const tr = document.createElement('tr');
     if (r.quiet) tr.classList.add('periph-only');
     if (clickable) tr.classList.add('clickable');
-    const th = document.createElement('th'); th.scope = 'row'; th.textContent = r.title;
+    const th = document.createElement('th'); th.scope = 'row';
+    // A narrow panel wraps long dotted repo names at the dots, not mid-word.
+    r.title.split('.').forEach((part, i) => {
+      if (i) { th.appendChild(document.createTextNode('.')); th.appendChild(document.createElement('wbr')); }
+      th.appendChild(document.createTextNode(part));
+    });
     tr.appendChild(th);
     r.cells.forEach(v => {
       const td = document.createElement('td');

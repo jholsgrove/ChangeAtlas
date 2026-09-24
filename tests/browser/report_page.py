@@ -71,6 +71,48 @@ class ReportPage:
     def side_panel_expanded(self) -> bool:
         return self.page.locator(S.SIDE_TOGGLE).get_attribute("aria-expanded") == "true"
 
+    # ---- low-resolution layout ----
+
+    def search_for(self, title: str):
+        """Type a component's title into the search box and commit it, as a reader would."""
+        self.page.fill(S.SEARCH, title)
+        self.page.press(S.SEARCH, "Enter")
+
+    def top_of_in_view(self, selector: str) -> bool:
+        """The element's top edge is on screen and inside every scrolling box around it."""
+        return self.page.evaluate("""s => {
+          const el = document.querySelector(s), r = el.getBoundingClientRect();
+          const inside = (t, box) => t >= box.top && t < box.bottom - 40;
+          if (!inside(r.top, { top: 0, bottom: innerHeight })) return false;
+          for (let a = el.parentElement; a; a = a.parentElement) {
+            const o = getComputedStyle(a).overflowY;
+            if ((o === 'auto' || o === 'scroll' || o === 'hidden') && a !== document.body && a !== document.documentElement
+                && !inside(r.top, a.getBoundingClientRect())) return false;
+          }
+          return true;
+        }""", selector)
+
+    def reachable(self, selector: str) -> bool:
+        """Scrolled to the way a reader could, the element sits wholly on screen, unclipped."""
+        return self.page.evaluate("""s => {
+          const el = document.querySelector(s);
+          el.scrollIntoView({ block: 'nearest' });
+          // Script can scroll an overflow:hidden box; a reader cannot. If one
+          // had to move to show the element, it is out of the reader's reach.
+          for (let a = el.parentElement; a; a = a.parentElement) {
+            if (getComputedStyle(a).overflowY === 'hidden' && a.scrollTop > 0) { a.scrollTop = 0; return false; }
+          }
+          const r = el.getBoundingClientRect();
+          if (r.height === 0 || r.top < 0 || r.bottom > innerHeight) return false;
+          for (let a = el.parentElement; a; a = a.parentElement) {
+            if (a === document.body || a === document.documentElement) break;
+            if (getComputedStyle(a).overflowY === 'visible') continue;
+            const b = a.getBoundingClientRect();
+            if (r.top < b.top - 0.5 || r.bottom > b.bottom + 0.5) return false;
+          }
+          return true;
+        }""", selector)
+
     # ---- graph ----
 
     def canvas_width(self) -> float:
