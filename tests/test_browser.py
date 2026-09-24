@@ -297,6 +297,41 @@ def test_whole_map_untouched_chip_hides_and_shows_untouched(report):
     assert report.visible_node_count() == total
 
 
+def test_a_filtered_tier_leaves_with_the_untouched_when_they_are_hidden(report):
+    # A filtered tier wears the untouched grey. Once untouched nodes are hidden
+    # it has to go with them: left behind, it reads as an untouched node the
+    # hide missed (seen on the real 26.10 report: 12 grey peripherals).
+    peripheral = report.page.evaluate("counts.peripheral")
+    assert peripheral > 0
+    tiered = report.tiered_node_count()
+    report.toggle_legend_chip("Untouched")
+    report.toggle_legend_chip("Peripheral")
+    report.wait_settled()
+    assert report.greyed_drawn_count() == 0
+    assert report.visible_node_count() == tiered - peripheral
+    assert report.ghosts_in_physics() == 0
+    untouched = report.total_node_count() - tiered
+    assert f"{untouched} untouched hidden, {peripheral} filtered out." in report.lens_note()
+    report.toggle_legend_chip("Peripheral")          # back on: they return
+    report.wait_settled()
+    assert report.visible_node_count() == tiered
+    report.choose_lens("Release only")
+    report.toggle_legend_chip("Peripheral")
+    report.wait_settled()
+    assert report.greyed_drawn_count() == 0
+    assert report.ghosts_in_physics() == 0
+
+
+def test_a_filtered_frequency_leaves_with_the_never_changed_when_they_are_hidden(report):
+    report.wait_history()
+    report.switch_view("history")
+    report.toggle_legend_chip("Never")
+    report.toggle_legend_chip("In 1 of")
+    report.wait_settled()
+    assert report.greyed_drawn_count() == 0
+    assert report.ghosts_in_physics() == 0
+
+
 def test_untouched_chip_is_a_key_outside_whole_map(large_report):
     assert large_report.active_lens() == "In context"
     assert not large_report.legend_entry_is_button("Untouched")

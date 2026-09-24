@@ -293,6 +293,13 @@ class ReportPage:
         """Nodes with any release tier (everything that is not untouched)."""
         return self.page.evaluate("DATA.nodes.filter(n => stateOf(n.id) !== 'dimmed').length")
 
+    def greyed_drawn_count(self) -> int:
+        """Nodes drawn at top level that wear the untouched grey (untouched, or a filtered tier/frequency)."""
+        return self.page.evaluate("""() => DATA.nodes.filter(n =>
+          network.findNode(n.id)[0] === n.id && !visNodes.get(n.id).hidden &&
+          (currentView === 'history' ? (histFreq(n.id) === 0 || filteredFreq.has(histFreq(n.id)))
+                                     : effectiveState(n.id) === 'dimmed')).length""")
+
     def visible_ids(self) -> list:
         """Ids of everything vis is drawing at top level: nodes and bubbles, not hidden."""
         return self.page.evaluate("network.body.nodeIndices")

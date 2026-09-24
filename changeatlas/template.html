@@ -493,10 +493,14 @@ function legendKey(color, text) {
   legend.appendChild(el);
 }
 function toggleFilter(set, key) {
-  if (set.has(key)) set.delete(key); else set.add(key);
+  const off = !set.has(key);
+  if (off) set.add(key); else set.delete(key);
   refreshVisuals();
   buildLegend();
   if (selected) spotlight(neighbours(selected)); // keep an open selection spotlit
+  // With the untouched hidden, a filtered tier leaves the canvas too (see
+  // `tiered`), so the hide has to be re-applied.
+  if (hideUntouched) settleCanvas(off ? 'Filtered out' : 'Filter cleared');
 }
 function buildLegend() {
   legend.textContent = '';
@@ -736,11 +740,17 @@ function repoSummary(key, state = stateOf) {
 // is what survives hiding: Release only keeps peripheral neighbours, Hot
 // only keeps only the hot, and the Never chip on History's Whole map hides
 // just the never-changed (so the cut there is one release, not K_HOT).
+// A tier or frequency the legend has filtered wears the untouched grey, so
+// it does not survive either: left behind it reads as an untouched node the
+// hide missed.
 const evident = id => currentView === 'history' ? histFreq(id) >= K_HOT
   : ['changed', 'touched', 'testOnly'].includes(stateOf(id));
-const tiered = id => currentView === 'history'
+const rawTiered = id => currentView === 'history'
   ? histFreq(id) >= (lens.history === 'hot' ? K_HOT : 1)
   : stateOf(id) !== 'dimmed';
+const legendFiltered = id => currentView === 'history' ? filteredFreq.has(histFreq(id))
+  : currentView === 'impact' && filteredTiers.has(stateOf(id));
+const tiered = id => rawTiered(id) && !legendFiltered(id);
 const hasEvidence = key => (membersOf[key] || []).some(evident);
 
 // ---- lenses: named canvas states, one remembered per view for the session.
@@ -984,6 +994,10 @@ function describeLens() {
   const L = currentLens(); if (!L) return '';
   const total = DATA.nodes.length;
   const hidden = DATA.nodes.filter(n => gone(n.id)).length;
+  // Filtered tiers hidden alongside the untouched are counted apart, so the
+  // "untouched hidden" figure stays true.
+  const filtered = DATA.nodes.filter(n => gone(n.id) && rawTiered(n.id)).length;
+  const alsoFiltered = filtered ? ', ' + filtered + ' filtered out' : '';
   const inside = [...collapsed].reduce((n, k) => n + (membersOf[k] || []).length, 0);
   let what;
   if (currentView === 'system') {
@@ -991,20 +1005,20 @@ function describeLens() {
                             : 'All ' + plural(total, 'component') + ', flat.';
   } else if (currentView === 'history') {
     const N = HISTORY ? HISTORY.n : 0;
-    if (L.hide) what = plural(total - hidden, 'component') + ' hot in the last ' + N + ' releases shown, ' + hidden + ' hidden.';
+    if (L.hide) what = plural(total - hidden, 'component') + ' hot in the last ' + N + ' releases shown, ' + (hidden - filtered) + ' hidden' + alsoFiltered + '.';
     else if (L.rule === 'evidence') what = collapsed.size
       ? plural(collapsed.size, 'repo') + ' with no hot component collapsed into bubbles, ' + plural(inside, 'component') + ' inside.'
       : 'Every repo has a hot component, so nothing collapsed.';
-    else what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + hidden + ' never changed hidden.'
+    else what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + (hidden - filtered) + ' never changed hidden' + alsoFiltered + '.'
                               : 'All ' + plural(total, 'component') + ', ' + histSummary().never + ' never changed faded.';
   } else if (L.hide) {
-    what = plural(total - hidden, 'component') + ' in this release shown, ' + hidden + ' untouched hidden.';
+    what = plural(total - hidden, 'component') + ' in this release shown, ' + (hidden - filtered) + ' untouched hidden' + alsoFiltered + '.';
   } else if (L.rule === 'evidence') {
     what = collapsed.size ? plural(collapsed.size, 'repo') + ' with nothing in this release collapsed into bubbles, ' +
                             plural(inside, 'component') + ' inside.'
                           : 'Every repo has something in this release, so nothing collapsed.';
   } else {
-    what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + hidden + ' untouched hidden.'
+    what = hideUntouched ? plural(total - hidden, 'component') + ' shown, ' + (hidden - filtered) + ' untouched hidden' + alsoFiltered + '.'
                          : 'All ' + plural(total, 'component') + ', ' + counts.dimmed + ' untouched faded.';
   }
   return L.label + '. ' + what;
