@@ -204,9 +204,15 @@ class ReportPage:
         }""", node_id))
 
     def unconnected_node_pair(self) -> tuple:
-        """Two visible nodes with no edge between them (so one's spotlight excludes the other)."""
+        """Two visible nodes with no edge between them (so one's spotlight excludes the other).
+
+        Both must be the topmost thing at their own centre: the layout is
+        unseeded, and now and then a bubble settles over a node, so a pointer
+        aimed at it hovers the bubble instead and the hover wait times out.
+        """
         return tuple(self.page.evaluate("""() => {
-          const ids = network.body.nodeIndices.filter(i => !network.isCluster(i));
+          const onTop = i => network.getNodeAt(network.canvasToDOM(network.getPositions([i])[i])) === i;
+          const ids = network.body.nodeIndices.filter(i => !network.isCluster(i) && onTop(i));
           for (const a of ids) {
             const near = new Set(network.getConnectedNodes(a));
             const b = ids.find(o => o !== a && !near.has(o));
