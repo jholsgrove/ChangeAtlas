@@ -354,7 +354,7 @@ def test_lens_note_describes_what_the_lens_did():
     html = _render()
     assert "function describeLens()" in html
     assert "lensNote.textContent = describeLens()" in html
-    for frag in ("' in this release shown, '", "' untouched hidden.'",
+    for frag in ("' in this release shown, '", "' untouched hidden' + alsoFiltered + '.'",
                  "' with nothing in this release collapsed into bubbles, '", "' inside.'",
                  "' untouched faded.'", "' as bubbles. Click one to open it.'",
                  "lensNote.textContent = describeLens();   // the note has no settle to wait for at bootstrap"):
