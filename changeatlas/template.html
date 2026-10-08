@@ -651,7 +651,9 @@ function showNode(id) {
   if (own && det && det.stories.length) {
     h += '<h4>Stories in this release</h4><ul>' + det.stories.map(s =>
       '<li><span class="kind">' + esc(s.type) + '</span>' +
-      '<a href="' + esc(safeUrl(s.url)) + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a></li>'
+      '<a href="' + esc(safeUrl(s.url)) + '" target="_blank">#' + s.id + ' ' + esc(s.title) + '</a>' +
+      (s.inQuery === false ? ' <span class="empty" title="Found on the release branch; the release query does not include this work item.">· not in query</span>' : '') +
+      '</li>'
     ).join('') + '</ul>';
   }
   if (own && det && det.prs.length) {
@@ -1244,7 +1246,8 @@ function buildListView() {
       const node = DATA.nodes.find(n => n.id === id);
       const tr = document.createElement("tr");
       const links = list => list.map(x =>
-        `<a href="${escapeHtml(safeUrl(x.url))}">${escapeHtml("#" + x.id + " " + x.title)}</a>`).join("<br>");
+        `<a href="${escapeHtml(safeUrl(x.url))}">${escapeHtml("#" + x.id + " " + x.title)}</a>` +
+        (x.inQuery === false ? " (not in query)" : "")).join("<br>");
       tr.innerHTML = `<th scope="row">${escapeHtml(node ? node.title : id)}</th>` +
         `<td>${label}</td><td>${d.prodFiles}</td><td>${d.testFiles}</td>` +
         `<td>${links(d.stories)}</td><td>${links(d.prs)}</td>`;
@@ -1464,7 +1467,8 @@ function noteFor(n, names, system) {
   if (det && det.stories && det.stories.length) {
     L.push('## Stories in this release', '');
     det.stories.forEach(s =>
-      L.push('- ' + s.type + ' [#' + s.id + ' ' + mdLinkText(s.title) + '](' + safeUrl(s.url) + ')'));
+      L.push('- ' + s.type + ' [#' + s.id + ' ' + mdLinkText(s.title) + '](' + safeUrl(s.url) + ')' +
+             (s.inQuery === false ? ' (not in query)' : '')));
     L.push('');
   }
   if (det && det.prs && det.prs.length) {

@@ -116,6 +116,27 @@ def _render_one(release, gathered, graph, components, heur, args, out_dir):
         print("Unmapped beyond repo (extend config/component-globs.json):")
         for f in result["beyond_repo_files"]:
             print(f"  {f}")
+    branches = gathered.get("branch_repos") or {}
+    if branches:
+        print("Release branch diffs (these repos ship exactly this):")
+        for repo, b in branches.items():
+            flag = " — release not cut yet" if b.get("in_progress") else ""
+            print(f"  {repo}: {b['base']}..{b['target']} "
+                  f"({len(b['files'])} files, {len(b['prs'])} PRs){flag}")
+        outside = [wi for wi in gathered["work_items"] if wi.get("in_query") is False]
+        if outside:
+            print(f"{len(outside)} work item(s) found on release branches but not in the query")
+    if result["not_on_branch"]:
+        print("Linked to the release but not on the release branch (not shaded):")
+        for p in result["not_on_branch"]:
+            print(f"  {p['repo']} !{p['id']} {p['title']}")
+    for c in result["bulk_skipped"]:
+        print(f"Ignored bulk direct commit {c['repo']} {c['id'][:8]} \"{c['comment']}\" "
+              f"({c['files']} file(s) no PR touched)")
+    if result["direct_files"]:
+        print(f"{len(result['direct_files'])} release-branch file(s) from direct commits (no PR):")
+        for f in result["direct_files"]:
+            print(f"  {f}")
 
 
 def main(argv=None, fetch=ado.default_fetch) -> int:

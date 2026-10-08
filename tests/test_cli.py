@@ -386,3 +386,18 @@ def test_anonymized_sample_render_writes_no_history_files(tmp_path):
     assert not (series / "latest.html").exists()
     assert not (series / "impact-1.0.history.js").exists()
     assert '"history": false' in (series / "impact-1.0-anon.html").read_text(encoding="utf-8")
+
+
+def test_main_reports_branch_diff_and_not_on_branch(tmp_path, capsys):
+    root, args = make_project(tmp_path)
+    cache = json.loads(json.dumps(CACHE))
+    cache["branch_repos"] = {"Shop.Web": {
+        "base": "release/0.9", "target": "release/1.0", "in_progress": False,
+        "files": ["/checkout/Form.tsx", "/checkout/Direct.tsx"], "prs": [5],
+        "unlinked_prs": []}}
+    (root / "out" / "release-1.0-data.json").write_text(json.dumps(cache), encoding="utf-8")
+    assert cli.main(args, fetch=None) == 0
+    out = capsys.readouterr().out
+    assert "Shop.Web: release/0.9..release/1.0 (2 files, 1 PRs)" in out
+    assert "not on the release branch" in out and "!2 p" in out
+    assert "direct commit" in out and "/checkout/Direct.tsx" in out

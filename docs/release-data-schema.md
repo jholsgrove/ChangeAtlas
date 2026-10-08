@@ -59,6 +59,22 @@ of how the labels sort.
 | `prs[].repo` | string | The repo name as your git host reports it — **don't pre-normalise it**. ChangeAtlas lowercases it and replaces `.` with `-` itself when matching against `config/component-globs.json`. |
 | `prs[].url` | string | Link straight to the PR. |
 | `prs[].files` | array of strings | Every file the PR changed (added, modified, or deleted — not renamed-only or directory entries) at its latest revision, as a path **relative to the repo root, with a leading `/`** — e.g. `/src/checkout/CouponForm.tsx`, not `src/checkout/CouponForm.tsx` and not an absolute filesystem path. |
+| `work_items[].in_query` | boolean, optional | `false` for a work item the release query didn't return but a PR on a release branch links to. The report marks its stories "not in query". Omit for query items. |
+| `branch_repos` | object, optional | Repo name → release-branch diff, for repos that cut release branches. When present for a repo, it is the truth for what ships there (see below). Omit it entirely and every repo is read from `work_items` alone. |
+| `branch_repos.<repo>.base` / `.target` | string | The previous release ref and this release's ref: a `release/<version>` branch, a `v<version>` tag where the branch is gone, or the default branch when this release isn't cut yet. |
+| `branch_repos.<repo>.in_progress` | boolean | `true` when `target` is the default branch (release not cut yet). |
+| `branch_repos.<repo>.files` | array of strings | Every file that differs between `base` and `target`, same path format as `prs[].files`. |
+| `branch_repos.<repo>.prs` | array of numbers | PR ids merged between `base` and `target`. |
+| `branch_repos.<repo>.unlinked_prs` | array | Those PRs (same shape as `prs[]`) that link to no work item. |
+| `branch_repos.<repo>.bulk_commits` | array | Large direct commits (`{id, comment, files}`) — a renormalize, a mass reformat. Their files never count as direct changes. |
+
+### Release-branch repos
+
+For a repo in `branch_repos`, only files in its `files` list count. A PR in
+that repo that isn't in `prs` (merged after the cut, or targeting another
+release) is listed as "not on the release branch" and shades nothing. A
+diff file no PR touched counts as a direct commit, with no story, unless a
+bulk commit touched it.
 
 ## How ChangeAtlas uses this file
 
