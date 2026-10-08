@@ -191,3 +191,83 @@ def test_database_schema_test_files_dont_shade():
         gathered(["/Tests/Integration/MigrationsTest.cs"]),
         DB_COMPONENTS, DB_NODES, DB_EDGES, HEUR)
     assert "checkout-db" not in out["changed"] + out["touched"] + out["test_only"]
+
+
+# --- release-branch diff -------------------------------------------------------
+
+def _pr(pid, files, repo="Checkout.Service"):
+    return {"id": pid, "title": f"P{pid}", "repo": repo, "url": f"pr-{pid}",
+            "status": "completed", "files": list(files)}
+
+
+def branch_gathered(branch_files, branch_prs, query_prs, outside_prs=(), unlinked=()):
+    wis = [{"id": 1, "type": "User Story", "title": "Q", "url": "wi-1",
+            "prs": list(query_prs)}]
+    if outside_prs:
+        wis.append({"id": 7, "type": "Bug", "title": "Out", "url": "wi-7",
+                    "in_query": False, "prs": list(outside_prs)})
+    return {"release": "2.0", "work_items": wis, "branch_repos": {"Checkout.Service": {
+        "base": "release/1.9", "target": "release/2.0", "in_progress": False,
+        "files": list(branch_files), "prs": list(branch_prs),
+        "unlinked_prs": list(unlinked)}}}
+
+
+def test_branch_repo_shades_from_outside_query_story():
+    g = branch_gathered(
+        ["/Snmp/A.cs", "/Snmp/B.cs", "/Snmp/C.cs"], [11],
+        query_prs=[], outside_prs=[_pr(11, ["/Snmp/A.cs", "/Snmp/B.cs", "/Snmp/C.cs"])])
+    r = impact.compute(g, COMPONENTS, NODES, EDGES, HEUR)
+    assert r["changed"] == ["checkout-snmp-stack"]
+    stories = r["details"]["checkout-snmp-stack"]["stories"]
+    assert stories == [{"id": 7, "type": "Bug", "title": "Out",
+                        "url": "wi-7", "inQuery": False}]
+
+
+def test_branch_repo_pr_not_on_branch_is_reported_not_shaded():
+    g = branch_gathered(["/Core/X.cs"], [10],
+                        query_prs=[_pr(10, ["/Core/X.cs"]), _pr(99, ["/Snmp/A.cs"])])
+    r = impact.compute(g, COMPONENTS, NODES, EDGES, HEUR)
+    assert r["touched"] == ["checkout-core"]
+    assert "checkout-snmp-stack" not in r["details"]
+    assert [p["id"] for p in r["not_on_branch"]] == [99]
+    assert "inQuery" not in r["details"]["checkout-core"]["stories"][0]
+
+
+def test_branch_repo_ignores_pr_files_not_in_diff():
+    # PR 10 touched Snmp/A.cs, but a later PR reverted it: not in what ships.
+    g = branch_gathered(["/Core/X.cs"], [10],
+                        query_prs=[_pr(10, ["/Core/X.cs", "/Snmp/A.cs"])])
+    r = impact.compute(g, COMPONENTS, NODES, EDGES, HEUR)
+    assert "checkout-snmp-stack" not in r["details"]
+
+
+def test_branch_diff_files_without_pr_count_as_direct_commits():
+    g = branch_gathered(["/Core/X.cs", "/Snmp/A.cs"], [12], query_prs=[],
+                        unlinked=[_pr(12, ["/Core/X.cs"])])
+    r = impact.compute(g, COMPONENTS, NODES, EDGES, HEUR)
+    assert r["touched"] == ["checkout-core", "checkout-snmp-stack"]
+    assert [p["id"] for p in r["details"]["checkout-core"]["prs"]] == [12]
+    assert r["details"]["checkout-core"]["stories"] == []
+    snmp = r["details"]["checkout-snmp-stack"]
+    assert (snmp["stories"], snmp["prs"], snmp["prodFiles"]) == ([], [], 1)
+    assert r["direct_files"] == ["Checkout.Service:/Snmp/A.cs"]
+
+
+def test_non_branch_repo_still_uses_query_prs():
+    g = branch_gathered([], [], query_prs=[_pr(20, ["/src/Portal.cs"], repo="shop-web")])
+    comps = COMPONENTS + [{"id": "shop-portal", "repo": "shop-web", "globs": ["**/src/**"]}]
+    r = impact.compute(g, comps, NODES, EDGES, HEUR)
+    assert r["touched"] == ["shop-portal"]
+    assert r["not_on_branch"] == []
+
+
+def test_bulk_commit_files_are_not_credited_as_direct():
+    g = branch_gathered(["/Core/X.cs", "/Snmp/A.cs"], [10], query_prs=[_pr(10, ["/Core/X.cs"])])
+    g["branch_repos"]["Checkout.Service"]["bulk_commits"] = [
+        {"id": "d413", "comment": "Renormalize", "files": ["/Snmp/A.cs", "/Core/X.cs"]}]
+    r = impact.compute(g, COMPONENTS, NODES, EDGES, HEUR)
+    assert r["touched"] == ["checkout-core"]          # PR credit survives the bulk commit
+    assert "checkout-snmp-stack" not in r["details"]
+    assert r["direct_files"] == []
+    assert r["bulk_skipped"] == [{"repo": "Checkout.Service", "id": "d413",
+                                  "comment": "Renormalize", "files": 1}]

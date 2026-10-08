@@ -129,3 +129,11 @@ def test_repo_labels_survive_past_26_repos():
     assert "Repo Z" in labels
     assert "Repo 27" in labels
     assert "Repo 30" in labels
+
+
+def test_not_in_query_marker_survives():
+    p = json.loads(json.dumps(PAYLOAD))
+    p["details"]["shop-checkout"]["stories"][0]["inQuery"] = False
+    out = anonymize.anonymize_payload(p)
+    stories = [s for d in out["details"].values() for s in d["stories"]]
+    assert [s.get("inQuery", True) for s in stories] == [True, False]

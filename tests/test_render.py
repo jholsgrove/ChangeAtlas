@@ -120,3 +120,11 @@ def test_render_embeds_group_threshold(tmp_path):
     p["groupThreshold"] = 42
     html = render.render(p, TEMPLATE, vis)
     assert '"groupThreshold": 42' in html
+
+
+def test_stories_outside_the_query_are_marked():
+    # Panel, List view and markdown export all flag branch-found stories.
+    src = TEMPLATE.read_text(encoding="utf-8")
+    assert src.count("s.inQuery === false") >= 2
+    assert src.count("x.inQuery === false") >= 1
+    assert "not in query" in src

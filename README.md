@@ -68,6 +68,13 @@ python -m changeatlas --query <shared-query-url> --release 26.8 \
 release's work items. The result is cached to
 `out/release-26.8-data.json`; re-running without `--refresh` reuses it.
 
+Repos that cut `release/<version>` branches (or tag `v<version>`) are read
+from the branch diff instead: the previous release's ref against this
+one's decides what shipped, and the query only labels it. Stories found
+that way are marked "not in query" in the report. Only repos the query
+already touches are checked, and only when the release label is a dotted
+number (`26.8`, `2.0.1`); anything else falls back to the query alone.
+
 ## The method
 
 1. **Scan the system, once.** Point your own AI agent (Claude Code, Cursor,

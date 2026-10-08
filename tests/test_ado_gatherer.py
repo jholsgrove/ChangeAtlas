@@ -74,6 +74,8 @@ def test_gather_release_skips_failing_pr_and_reports():
         if "workitems/1" in url:
             return {"relations": [{"rel": "ArtifactLink",
                     "url": "vstfs:///Git/PullRequestId/P%2FR1%2F10"}]}
+        if "/refs?" in url:
+            return {"value": []}
         if "/_apis/git/repositories" in url:
             return {"value": [{"id": "R1", "name": "shop-web", "isDisabled": False}]}
         if "/_apis/git/pullrequests/10" in url:
@@ -105,6 +107,8 @@ def test_gather_release_caches_pr_across_work_items():
                     "url": f"vstfs:///Git/PullRequestId/P%2F{REPO_GUID}%2F{PR_ID}"}]}
         if "/_apis/git/repositories?" in url:
             return {"value": [{"id": REPO_GUID.upper(), "name": "shop-web", "isDisabled": False}]}
+        if "/refs?" in url:
+            return {"value": []}
         if f"/_apis/git/pullrequests/{PR_ID}?" in url:
             return {"pullRequestId": PR_ID, "title": "Checkout fix", "status": "completed",
                     "repository": {"name": "shop-web"}}
@@ -169,3 +173,223 @@ def test_pr_changed_files_empty_iterations_returns_empty_list():
     of raising ValueError out of max() on an empty sequence."""
     fetch = make_fetch({"/pullRequests/9/iterations?": {"value": []}})
     assert ado.pr_changed_files(fetch, ORG, PROJ, "shop-web", 9) == []
+
+
+# --- release-branch diff -------------------------------------------------------
+
+def _refs(*versions):
+    return {v: f"release/{v}" for v in versions}
+
+
+def test_pick_branch_pair_highest_lower_version_as_base():
+    assert ado.pick_branch_pair(_refs("26.8", "26.10", "26.9", "25.12"), "26.10", "master") ==         ("release/26.9", "release/26.10", False)
+
+
+def test_pick_branch_pair_uncut_release_targets_default_branch():
+    assert ado.pick_branch_pair(_refs("26.9", "26.10"), "26.11", "main") ==         ("release/26.10", "main", True)
+
+
+def test_pick_branch_pair_none_without_lower_branch_or_version_label():
+    assert ado.pick_branch_pair(_refs("26.10"), "26.10", "master") is None
+    assert ado.pick_branch_pair({}, "26.10", "master") is None
+    assert ado.pick_branch_pair(_refs("26.9"), "sample", "master") is None
+
+
+def test_release_refs_branches_win_over_tags_and_tags_fill_deleted_branches():
+    fetch = make_fetch({
+        "/refs?filter=heads/release/": {"value": [
+            {"name": "refs/heads/release/26.8"}, {"name": "refs/heads/release/26.9"},
+            {"name": "refs/heads/release/hotfix-x"}]},
+        "/refs?filter=tags/v": {"value": [
+            {"name": "refs/tags/v26.7"}, {"name": "refs/tags/v26.8"},
+            {"name": "refs/tags/vNext"}]}})
+    assert ado.release_refs(fetch, ORG, PROJ, "R1") == {
+        "26.7": "v26.7", "26.8": "release/26.8", "26.9": "release/26.9"}
+
+
+def test_ref_type_tags_vs_branches():
+    assert ado.ref_type("v26.7") == "tag"
+    assert ado.ref_type("release/26.8") == "branch"
+    assert ado.ref_type("master") == "branch"
+
+
+def test_branch_diff_uses_tag_version_type_for_tag_base():
+    fetch = make_fetch({"/diffs/commits?": {"allChangesIncluded": True, "changes": []},
+                        "/commits?": {"value": []}})
+    ado.branch_diff_files(fetch, ORG, PROJ, "R1", "v26.7", "release/26.8")
+    ado.branch_commits(fetch, ORG, PROJ, "R1", "v26.7", "release/26.8")
+    assert "baseVersion=v26.7&baseVersionType=tag" in fetch.calls[0]
+    assert "targetVersionType=branch" in fetch.calls[0]
+    assert "itemVersion.versionType=tag&searchCriteria.itemVersion.version=v26.7" in fetch.calls[1]
+
+
+def test_branch_diff_files_pages_and_drops_trees(monkeypatch):
+    monkeypatch.setattr(ado, "_PAGE", 2)
+    pages = [
+        {"allChangesIncluded": False, "changes": [
+            {"item": {"path": "/src", "gitObjectType": "tree"}},
+            {"item": {"path": "/src/a.pas", "gitObjectType": "blob"}}]},
+        {"allChangesIncluded": True, "changes": [
+            {"item": {"path": "/src/b.pas", "gitObjectType": "blob"}}]},
+    ]
+    calls = []
+    def fetch(url):
+        calls.append(url)
+        return pages[len(calls) - 1]
+    files = ado.branch_diff_files(fetch, ORG, PROJ, "R1", "release/26.9", "release/26.10")
+    assert files == ["/src/a.pas", "/src/b.pas"]
+    assert "baseVersion=release/26.9" in calls[0] and "targetVersion=release/26.10" in calls[0]
+    assert "$skip=0" in calls[0] and "$skip=" in calls[1] and "$skip=0" not in calls[1]
+
+
+def test_branch_commits_parses_both_merge_message_styles():
+    fetch = make_fetch({"/commits?": {"count": 4, "value": [
+        {"commitId": "c1", "comment": "Merged PR 13356: Fix ifAdminStatus"},
+        {"commitId": "c2", "comment": "Merge pull request 13369 from users/x/y into master"},
+        {"commitId": "c3", "comment": "WIP inner commit", "changeCounts": {"Edit": 3}},
+        {"commitId": "c4", "comment": "Merged PR 13356: duplicate"}]}})
+    pr_ids, bulk = ado.branch_commits(fetch, ORG, PROJ, "R1", "release/26.9", "release/26.10")
+    assert (pr_ids, bulk) == ([13356, 13369], [])
+    url = fetch.calls[0]
+    assert "itemVersion.version=release/26.9" in url
+    assert "compareVersion.version=release/26.10" in url
+
+
+def _branch_fetch(extra=None):
+    """Query returns story 1 (linked to PR 10). The poller repo cut release/2.0;
+    its branch range holds PR 10 and PR 11 (linked to outside story 7) and
+    PR 12 (no work item). shop-web has no release branches."""
+    routes = {
+        "/_apis/wit/wiql/": {"workItems": [{"id": 1}]},
+        "/_apis/wit/workitems?ids=1&": {"value": [
+            {"id": 1, "fields": {"System.WorkItemType": "User Story", "System.Title": "Q"}}]},
+        "/_apis/wit/workitems?ids=7&": {"value": [
+            {"id": 7, "fields": {"System.WorkItemType": "Bug", "System.Title": "Out"}}]},
+        "/_apis/wit/workitems/1?": {"relations": [{"rel": "ArtifactLink",
+            "url": "vstfs:///Git/PullRequestId/P%2Fr1%2F10"}]},
+        "/_apis/git/repositories?": {"value": [
+            {"id": "R1", "name": "Shop.Poller", "defaultBranch": "refs/heads/master"},
+            {"id": "R2", "name": "shop-web", "defaultBranch": "refs/heads/main"}]},
+        "/repositories/r1/refs?": {"value": [
+            {"name": "refs/heads/release/1.9"}, {"name": "refs/heads/release/2.0"}]},
+        "/repositories/r2/refs?": {"value": []},
+        "/repositories/Shop.Poller/diffs/commits?": {"allChangesIncluded": True, "changes": [
+            {"item": {"path": "/Poller/TaskPoll.pas", "gitObjectType": "blob"}},
+            {"item": {"path": "/Poller/Snmp.pas", "gitObjectType": "blob"}},
+            {"item": {"path": "/Poller/Direct.pas", "gitObjectType": "blob"}}]},
+        "/repositories/Shop.Poller/commits?": {"value": [
+            {"commitId": "m12", "comment": "Merged PR 12: build tweak"},
+            {"commitId": "m11", "comment": "Merged PR 11: snmp fix"},
+            {"commitId": "m10", "comment": "Merged PR 10: task fix"}]},
+        "/pullRequests/10/workitems?": {"value": [{"id": "1"}]},
+        "/pullRequests/11/workitems?": {"value": [{"id": "7"}]},
+        "/pullRequests/12/workitems?": {"value": []},
+    }
+    for pid, path in ((10, "/Poller/TaskPoll.pas"), (11, "/Poller/Snmp.pas"),
+                      (12, "/.teamcity/settings.kts")):
+        routes[f"/_apis/git/pullrequests/{pid}?"] = {
+            "pullRequestId": pid, "title": f"PR {pid}", "status": "completed",
+            "repository": {"name": "Shop.Poller"}}
+        routes[f"/pullRequests/{pid}/iterations?"] = {"value": [{"id": 1}]}
+        routes[f"/pullRequests/{pid}/iterations/1/changes"] = {"changeEntries": [
+            {"item": {"path": path, "gitObjectType": "blob"}}]}
+    routes.update(extra or {})
+    return make_fetch(routes)
+
+
+def test_gather_release_adds_branch_diff_for_release_branch_repos():
+    gathered = ado.gather_release(_branch_fetch(), ORG, PROJ, "q", "2.0")
+    br = gathered["branch_repos"]
+    assert list(br) == ["Shop.Poller"]                    # shop-web: query-only
+    poller = br["Shop.Poller"]
+    assert (poller["base"], poller["target"], poller["in_progress"]) ==         ("release/1.9", "release/2.0", False)
+    assert poller["files"] == ["/Poller/TaskPoll.pas", "/Poller/Snmp.pas", "/Poller/Direct.pas"]
+    assert poller["prs"] == [12, 11, 10]
+    assert [p["id"] for p in poller["unlinked_prs"]] == [12]
+    assert poller["bulk_commits"] == []
+    by_id = {wi["id"]: wi for wi in gathered["work_items"]}
+    assert [p["id"] for p in by_id[1]["prs"]] == [10]     # not duplicated
+    assert "in_query" not in by_id[1]
+    assert by_id[7]["in_query"] is False
+    assert by_id[7]["type"] == "Bug"
+    assert [p["id"] for p in by_id[7]["prs"]] == [11]
+
+
+def test_gather_release_uncut_release_diffs_default_branch():
+    fetch = _branch_fetch({"/repositories/r1/refs?": {"value": [
+        {"name": "refs/heads/release/1.9"}]}})
+    poller = ado.gather_release(fetch, ORG, PROJ, "q", "2.0")["branch_repos"]["Shop.Poller"]
+    assert (poller["base"], poller["target"], poller["in_progress"]) ==         ("release/1.9", "master", True)
+
+
+def test_gather_release_checks_refs_only_for_repos_the_query_touched():
+    fetch = _branch_fetch()
+    ado.gather_release(fetch, ORG, PROJ, "q", "2.0")
+    assert any("/repositories/r1/refs?" in u for u in fetch.calls)
+    assert not any("/repositories/r2/refs?" in u for u in fetch.calls)
+
+
+def test_gather_release_skips_branches_for_non_version_release_label():
+    fetch = _branch_fetch()
+    gathered = ado.gather_release(fetch, ORG, PROJ, "q", "Sprint 42")
+    assert gathered["branch_repos"] == {}
+    assert not any("/refs?" in u for u in fetch.calls)
+
+
+def test_branch_diff_files_keeps_paging_when_flag_absent(monkeypatch):
+    # ADO omits allChangesIncluded on a truncated page instead of sending false.
+    monkeypatch.setattr(ado, "_PAGE", 2)
+    def blob(path):
+        return {"item": {"path": path, "gitObjectType": "blob"}}
+    pages = [{"changes": [blob("/a"), blob("/b")]},
+             {"allChangesIncluded": True, "changes": [blob("/c")]}]
+    calls = []
+    def fetch(url):
+        calls.append(url)
+        return pages[len(calls) - 1]
+    assert ado.branch_diff_files(fetch, ORG, PROJ, "R1", "release/1", "release/2") == \
+        ["/a", "/b", "/c"]
+
+
+def test_pr_changed_files_follows_next_skip_past_the_100_cap():
+    def blob(path):
+        return {"item": {"path": path, "gitObjectType": "blob"}}
+    calls = []
+    def fetch(url):
+        calls.append(url)
+        if url.endswith("/iterations?api-version=7.1"):
+            return {"value": [{"id": 2}]}
+        if "$skip=0" in url:
+            return {"changeEntries": [blob("/a.cs"), blob("/b.cs")], "nextSkip": 2, "nextTop": 2}
+        if "$skip=2" in url:
+            return {"changeEntries": [blob("/c.cs")], "nextSkip": 0, "nextTop": 0}
+        raise AssertionError(url)
+    assert ado.pr_changed_files(fetch, ORG, PROJ, "shop-web", 9) == ["/a.cs", "/b.cs", "/c.cs"]
+
+
+def test_branch_commits_flags_large_direct_commits_as_bulk(monkeypatch):
+    monkeypatch.setattr(ado, "_BULK_FILES", 3)
+    fetch = make_fetch({
+        "/commits/big1/changes?": {"changes": [
+            {"item": {"path": "/a.cs", "gitObjectType": "blob"}},
+            {"item": {"path": "/src", "gitObjectType": "tree"}},
+            {"item": {"path": "/b.cs", "gitObjectType": "blob"}}]},
+        "/commits?": {"value": [
+            {"commitId": "big1", "comment": "Renormalize\n\nline endings",
+             "changeCounts": {"Add": 0, "Edit": 4, "Delete": 0}},
+            {"commitId": "small", "comment": "hotfix", "changeCounts": {"Edit": 2}},
+            {"commitId": "pr", "comment": "Merged PR 5: huge", "changeCounts": {"Edit": 99}}]}})
+    pr_ids, bulk = ado.branch_commits(fetch, ORG, PROJ, "R1", "release/1", "release/2")
+    assert pr_ids == [5]
+    assert bulk == [{"id": "big1", "comment": "Renormalize", "files": ["/a.cs", "/b.cs"]}]
+
+
+def test_commit_files_pages(monkeypatch):
+    monkeypatch.setattr(ado, "_PAGE", 2)
+    def blob(path):
+        return {"item": {"path": path, "gitObjectType": "blob"}}
+    pages = {"skip=0": {"changes": [blob("/a"), blob("/b")]},
+             "skip=2": {"changes": [blob("/c")]}}
+    def fetch(url):
+        return next(v for k, v in pages.items() if k in url)
+    assert ado.commit_files(fetch, ORG, PROJ, "R1", "c1") == ["/a", "/b", "/c"]

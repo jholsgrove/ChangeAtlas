@@ -69,9 +69,12 @@ def anonymize_payload(payload: dict) -> dict:
         stories = []
         for s in d.get("stories", []):
             fake = story_map.setdefault(s["id"], len(story_map) + 1)
-            stories.append({"id": fake, "type": s.get("type", ""),
-                            "title": f"{s.get('type') or 'Work item'} {fake}",
-                            "url": f"{_FAKE_ORG}/_workitems/edit/{fake}"})
+            story = {"id": fake, "type": s.get("type", ""),
+                     "title": f"{s.get('type') or 'Work item'} {fake}",
+                     "url": f"{_FAKE_ORG}/_workitems/edit/{fake}"}
+            if s.get("inQuery") is False:
+                story["inQuery"] = False
+            stories.append(story)
         prs = []
         for p in d.get("prs", []):
             fake = pr_map.setdefault(p["id"], len(pr_map) + 1)
